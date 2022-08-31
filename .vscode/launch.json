@@ -1,0 +1,19 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: entry.py single_test",
+            "type": "python",
+            "request": "launch",
+            "program": "/code/code/cpu_code/actor/code/entry.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                "-single_test"
+            ]
+        }
+    ]
+}
