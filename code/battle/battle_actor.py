@@ -196,7 +196,7 @@ class BattleActor(Actor):
                 req_pb = req_pbs[1]
             else:
                 req_pb = req_pbs[0]
-            LOG.debug("step: {}, frame_no: {}, reward: {}, {}".format(step, req_pb.frame_no,
+            LOG.info("step: {}, frame_no: {}, reward: {}, {}".format(step, req_pb.frame_no,
                                                                       r[0], r[1]))
             step += 1
             done = d[0] or d[1]

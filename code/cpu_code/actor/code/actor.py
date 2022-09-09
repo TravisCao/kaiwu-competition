@@ -233,6 +233,18 @@ class Actor:
             log_time_func("step")
             # reward :[dead,ep_rate,exp,hp_point,kill,last_hit,money,tower_hp_point,reward_sum]
             _, r, d, state_dict = self.env.step(actions)
+
+            # accumulate different rewards
+            for i in range(0, 9):
+                if type(r[0]) == float:
+                    r_sum1[i] += float(r[1][i])
+                    continue
+                if type(r[1]) == float:
+                    r_sum0[i] += float(r[0][i])
+                    continue
+                r_sum0[i] += float(r[0][i])
+                r_sum1[i] += float(r[1][i])
+
             # if np.isnan(r[0][-1]) or np.isnan(r[1][-1]):
             #     exit(0)
             log_time_func("step", end=True)
@@ -273,6 +285,12 @@ class Actor:
                         organ.type, organ.camp, organ.hp
                     )
                 )
+
+        # log accumulated rewards
+        LOG.info("Agent0: [dead, ep_rate, exp, hp_point, kill, last_hit, money, tower_hp_point, reward_sum]:{}".format(
+            r_sum0))
+        LOG.info("Agent1: [dead, ep_rate, exp, hp_point, kill, last_hit, money, tower_hp_point, reward_sum]:{}".format(
+            r_sum1))
 
         for i, agent in enumerate(self.agents):
             if use_common_ai[i]:

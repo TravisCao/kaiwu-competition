@@ -4,6 +4,7 @@ build
 scripts
 .idea
 version
-gpu_code/learner/model/init/
+code/gpu_code/learner/model/init/
 code/battle/remote_aiserver
 *.swp
+code/battle/*.zip
