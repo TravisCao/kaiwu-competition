@@ -30,24 +30,24 @@ class Actor:
     """
 
     ALL_CONFIG_DICT = {
-        "luban": [{"hero": "luban", "skill": "rage"} for _ in range(2)],
-        "miyue": [{"hero": "miyue", "skill": "rage"} for _ in range(2)],
+        "luban": [{"hero": "luban", "skill": "frenzy"} for _ in range(2)],
+        "miyue": [{"hero": "miyue", "skill": "frenzy"} for _ in range(2)],
         "lvbu": [{"hero": "lvbu", "skill": "flash"} for _ in range(2)],
         "libai": [{"hero": "libai", "skill": "flash"} for _ in range(2)],
-        "makeboluo": [{"hero": "makeboluo", "skill": "daze"} for _ in range(2)],
-        "direnjie": [{"hero": "direnjie", "skill": "rage"} for _ in range(2)],
+        "makeboluo": [{"hero": "makeboluo", "skill": "stun"} for _ in range(2)],
+        "direnjie": [{"hero": "direnjie", "skill": "frenzy"} for _ in range(2)],
         "guanyu": [{"hero": "guanyu", "skill": "sprint"} for _ in range(2)],
         "diaochan": [{"hero": "diaochan", "skill": "purity"} for _ in range(2)],
-        "luna": [{"hero": "luna", "skill": "weak"} for _ in range(2)],
+        "luna": [{"hero": "luna", "skill": "intimidate"} for _ in range(2)],
         "hanxin": [{"hero": "hanxin", "skill": "flash"} for _ in range(2)],
         "huamulan": [{"hero": "huamulan", "skill": "flash"} for _ in range(2)],
         "buzhihuowu": [{"hero": "buzhihuowu", "skill": "execute"} for _ in range(2)],
         "jvyoujing": [{"hero": "jvyoujing", "skill": "flash"} for _ in range(2)],
-        "houyi": [{"hero": "houyi", "skill": "rage"} for _ in range(2)],
-        "zhongkui": [{"hero": "zhongkui", "skill": "daze"} for _ in range(2)],
+        "houyi": [{"hero": "houyi", "skill": "frenzy"} for _ in range(2)],
+        "zhongkui": [{"hero": "zhongkui", "skill": "stun"} for _ in range(2)],
         "ganjiangmoye": [{"hero": "ganjiangmoye", "skill": "flash"} for _ in range(2)],
-        "kai": [{"hero": "kai", "skill": "weak"} for _ in range(2)],
-        "gongsunli": [{"hero": "gongsunli", "skill": "rage"} for _ in range(2)],
+        "kai": [{"hero": "kai", "skill": "intimidate"} for _ in range(2)],
+        "gongsunli": [{"hero": "gongsunli", "skill": "frenzy"} for _ in range(2)],
         "peiqinhu": [{"hero": "peiqinhu", "skill": "flash"} for _ in range(2)],
         "shangguanwaner": [
             {"hero": "shangguanwaner", "skill": "heal"} for _ in range(2)
@@ -77,7 +77,7 @@ class Actor:
     }
 
     # def __init__(self, id, type):
-    def __init__(self, id, agents, max_episode: int = 0, env=None,gpu_ip="127.0.0.1"):
+    def __init__(self, id, agents, max_episode: int = 0, env=None, gpu_ip="127.0.0.1"):
         self.m_config_id = id
         self.m_task_uuid = Config.TASK_UUID
         self.m_episode_info = deque(maxlen=100)
@@ -201,6 +201,9 @@ class Actor:
         game_info = {}
         episode_infos = [{"h_act_num": 0} for _ in self.agents]
 
+        r_sum0 = [0] * 9
+        r_sum1 = [0] * 9
+
         while not done:
             log_time_func("one_frame")
             # while True:
@@ -277,18 +280,18 @@ class Actor:
             for hero_state in req_pbs[i].hero_list:
                 if agent.player_id == hero_state.runtime_id:
                     episode_infos[i]["money_per_frame"] = (
-                        hero_state.moneyCnt / game_info["length"]
+                            hero_state.moneyCnt / game_info["length"]
                     )
                     episode_infos[i]["kill"] = hero_state.killCnt
                     episode_infos[i]["death"] = hero_state.deadCnt
                     episode_infos[i]["hurt_per_frame"] = (
-                        hero_state.totalHurt / game_info["length"]
+                            hero_state.totalHurt / game_info["length"]
                     )
                     episode_infos[i]["hurtH_per_frame"] = (
-                        hero_state.totalHurtToHero / game_info["length"]
+                            hero_state.totalHurtToHero / game_info["length"]
                     )
                     episode_infos[i]["hurtBH_per_frame"] = (
-                        hero_state.totalBeHurtByHero / game_info["length"]
+                            hero_state.totalBeHurtByHero / game_info["length"]
                     )
                     episode_infos[i]["hero_id"] = self.HERO_DICT[env_config[0]["hero"]]
                     episode_infos[i]["totalHurtToHero"] = hero_state.totalHurtToHero
@@ -314,7 +317,7 @@ class Actor:
         )
 
     def _print_info(
-        self, game_id, game_info, episode_infos, eval, eval_info="", common_ai=None
+            self, game_id, game_info, episode_infos, eval, eval_info="", common_ai=None
     ):
         if common_ai is None:
             common_ai = [False] * len(self.agents)
@@ -398,9 +401,9 @@ class Actor:
         self._last_print_time = time.time()
         self._episode_num = 0
 
-        # SKILL_DICT = {"heal": 80102, "rage": 80110, "flash": 80115, "sprint": 80109,
-        #               "execute": 80108, "disrupt": 80105, "daze": 80103, "purity": 80107,
-        #               "weak": 80121}
+        # SKILL_DICT = {"heal": 80102, "frenzy": 80110, "flash": 80115, "sprint": 80109,
+        #               "execute": 80108, "disrupt": 80105, "stun": 80103, "purity": 80107,
+        #               "intimidate": 80121}
         if eval_mode:
             if load_models is None:
                 raise "load_models is None! "
@@ -415,6 +418,8 @@ class Actor:
         # support multi heroes
         camp1_heros = ["gongsunli", "makeboluo", "direnjie", "luban", "houyi"]
         camp2_heros = ["gongsunli", "makeboluo", "direnjie", "luban", "houyi"]
+
+        # change it to select heros
         camp1_index = 0
         camp2_index = 0
 
@@ -422,15 +427,16 @@ class Actor:
             hero_name1 = camp1_heros[camp1_index]
             hero_name2 = camp2_heros[camp2_index]
             config_dicts = [
-                dict(self.ALL_CONFIG_DICT[hero_name1][0]), 
+                dict(self.ALL_CONFIG_DICT[hero_name1][0]),
                 dict(self.ALL_CONFIG_DICT[hero_name2][1]),
             ]
 
             camp1_index += 1
             if camp1_index % 5 == 0:
+                # change it to select heros
                 camp1_index = 0
                 camp2_index = (camp2_index + 1) % 5
-            
+
             print(config_dicts)
             try:
                 # provide a init eval value at the first episode
@@ -452,8 +458,8 @@ class Actor:
                     swap = not swap
                 else:
                     eval_with_common_ai = (
-                        self._episode_num + 0
-                    ) % Config.EVAL_FREQ == 0 and self.m_config_id == 0
+                                                  self._episode_num + 0
+                                          ) % Config.EVAL_FREQ == 0 and self.m_config_id == 0
                     self._run_episode(
                         config_dicts, eval_with_common_ai, load_models=load_models
                     )

@@ -27,6 +27,13 @@ class Algorithm:
         self.target_embed_dim = Config.TARGET_EMBED_DIM
         self.cut_points = [value[0] for value in Config.data_shapes]
 
+        # var. to store the global update step
+        self.global_step = 0
+
+        self.first_decay_steps = Config.first_decay_steps
+        self.use_lr_decay = Config.use_lr_decay
+
+
     def get_input_tensors(self):
         return [
             self.feature_ph,
@@ -106,6 +113,14 @@ class Algorithm:
         return self.graph
 
     def build_graph(self, datas, update):
+        
+        # update is the global_step passed from graph variable in Benchmark Class
+        # build_graph function is invoked by the _add_forward_pass_and_gradients
+        # function in the graph variable
+        
+        # we can set the global step here for optimizer
+        self.set_global_step(update)
+
         # add split datas
         data_list = tf.split(datas, self.cut_points, axis=1)
         #  the meaning of each data in data_list should be as the same as that in GpuProxy.py
@@ -193,9 +208,16 @@ class Algorithm:
         }
 
         return loss, info_list
+    
+    def set_global_step(self, global_step):
+        self.global_step = global_step
 
     def get_optimizer(self):
+        if self.use_lr_decay:
+            lr_decayed = tf.train.cosine_decay_restarts(self.learning_rate, self.global_step, self.first_decay_steps)
+            return tf.train.AdamOptimizer(learning_rate=lr_decayed, epsilon=0.00001)
         return tf.train.AdamOptimizer(learning_rate=self.learning_rate, epsilon=0.00001)
+        # return tf.train.AdamOptimizer(learning_rate=MyLRSchedule(self.learning_rate), epsilon=0.00001)
 
     def _squeeze_tensor(
         self,

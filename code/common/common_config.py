@@ -21,6 +21,10 @@ class DimConfig:
 
 
 class ModelConfig:
+
+    first_decay_steps = 1000
+    use_lr_decay = True
+
     NETWORK_NAME = "network"
     LSTM_TIME_STEPS = 16
     LSTM_UNIT_SIZE = 512
@@ -122,7 +126,7 @@ class ModelConfig:
 
 
 class Config:
-    slow_time = 0.0
+    slow_time = 0.035
     TRAIN_MODE = 0
     EVAL_MODE = 1
     BATTLE_MODE = 2

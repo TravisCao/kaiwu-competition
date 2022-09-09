@@ -1,2 +1,9 @@
 logs
 model_bkup
+build
+scripts
+.idea
+version
+gpu_code/learner/model/init/
+code/battle/remote_aiserver
+*.swp
