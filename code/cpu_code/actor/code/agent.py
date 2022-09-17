@@ -16,7 +16,6 @@ from framework.common.common_func import log_time
 from config.config import ModelConfig, Config
 import rl_framework.common.logging as LOG
 
-
 _G_CHECK_POINT_PREFIX = "checkpoints_"
 _G_RAND_MAX = 10000
 _G_MODEL_UPDATE_RATIO = 0.8
@@ -37,12 +36,12 @@ class RandomAgent:
 
 class Agent:
     def __init__(
-        self,
-        model_cls,
-        model_pool_addr,
-        keep_latest=False,
-        local_mode=False,
-        dataset=None,
+            self,
+            model_cls,
+            model_pool_addr,
+            keep_latest=False,
+            local_mode=False,
+            dataset=None,
     ):
         self.model = model_cls()
         self.graph = self.model.build_infer_graph()
@@ -200,7 +199,7 @@ class Agent:
         top_size = ModelConfig.LABEL_SIZE_LIST[0]
         original_la = np.array(original_la)
         fix_part = original_la[: -target_size * top_size]
-        target_la = original_la[-target_size * top_size :]
+        target_la = original_la[-target_size * top_size:]
         target_la = target_la.reshape([top_size, target_size])[actions[0]]
         return np.concatenate([fix_part, target_la], axis=0)
 

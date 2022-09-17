@@ -16,6 +16,7 @@ import json
 import struct
 import socket
 import multiprocessing
+from operator import add
 
 IS_TRAIN = Config.IS_TRAIN
 LOG = CommonLogger.get_logger()
@@ -142,6 +143,9 @@ class BattleActor(Actor):
         return acts
 
     def _run_episode(self, env_config, mode=True, load_models=None, eval_info="", game_id=""):
+
+        LOG.info("run episode")
+
         for item in g_log_time.items():
             g_log_time[item[0]] = []
         sample_manager = self.m_sample_manager
@@ -157,6 +161,8 @@ class BattleActor(Actor):
         _, r, d, state_dict = self.env.reset(
             env_config, use_common_ai=use_common_ai, eval=eval, render=render, game_id=game_id
         )
+
+        # LOG.info(r)
         # if state_dict[0] is None:
         #     game_id = state_dict[1]['game_id']
         # else:
@@ -187,16 +193,18 @@ class BattleActor(Actor):
             log_time_func("predict_result", end=True)
             for i, agent in enumerate(self.agents):
                 rewards[i].append(state_dict[i]['reward'])
+
             # print("step: ", step)
             # print("start env step")
             o, r, d, state_dict = self.env.step(actions)
+
             # print("step end")
             req_pbs = self.env.cur_req_pb
             if req_pbs[0] is None:
                 req_pb = req_pbs[1]
             else:
                 req_pb = req_pbs[0]
-            LOG.info("step: {}, frame_no: {}, reward: {}, {}".format(step, req_pb.frame_no,
+            LOG.debug("step: {}, frame_no: {}, reward: {}, {}".format(step, req_pb.frame_no,
                                                                       r[0], r[1]))
             step += 1
             done = d[0] or d[1]
@@ -219,6 +227,16 @@ class BattleActor(Actor):
             log_time_func('one_frame', end=True)
 
         self.env.close_game()
+
+        # log accumulated rewards
+        # LOG.info(rewards)
+        r_array_sum = np.array(rewards).sum(axis=1)
+
+        # LOG.info(np.array(rewards).shape)
+        LOG.info("Agent0: [dead, ep_rate, exp, hp_point, kill, last_hit, money, tower_hp_point, reward_sum]:{}".format(
+            list(r_array_sum[0])))
+        LOG.info("Agent1: [dead, ep_rate, exp, hp_point, kill, last_hit, money, tower_hp_point, reward_sum]:{}".format(
+            list(r_array_sum[1])))
 
         # if aiprocess._model_manager.latest_version and int(self.m_config_id) != 0:
         # why self.m_config_id != 0?

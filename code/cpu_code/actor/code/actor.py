@@ -14,6 +14,7 @@ from framework.common.common_log import CommonLogger
 from framework.common.common_log import g_log_time
 from framework.common.common_func import log_time_func
 from rl_framework.monitor import InfluxdbMonitorHandler
+from operator import add
 
 IS_TRAIN = Config.IS_TRAIN
 LOG = CommonLogger.get_logger()
@@ -201,9 +202,7 @@ class Actor:
         game_info = {}
         episode_infos = [{"h_act_num": 0} for _ in self.agents]
 
-        r_sum0 = [0] * 9
-        r_sum1 = [0] * 9
-
+        cnt = 0
         while not done:
             log_time_func("one_frame")
             # while True:
@@ -234,17 +233,6 @@ class Actor:
             # reward :[dead,ep_rate,exp,hp_point,kill,last_hit,money,tower_hp_point,reward_sum]
             _, r, d, state_dict = self.env.step(actions)
 
-            # accumulate different rewards
-            for i in range(0, 9):
-                if type(r[0]) == float:
-                    r_sum1[i] += float(r[1][i])
-                    continue
-                if type(r[1]) == float:
-                    r_sum0[i] += float(r[0][i])
-                    continue
-                r_sum0[i] += float(r[0][i])
-                r_sum1[i] += float(r[1][i])
-
             # if np.isnan(r[0][-1]) or np.isnan(r[1][-1]):
             #     exit(0)
             log_time_func("step", end=True)
@@ -269,6 +257,7 @@ class Actor:
 
         self.env.close_game()
 
+        # determine which camp is lost
         game_info["length"] = req_pb.frame_no
         loss_camp = -1
         camp_hp = {}
@@ -286,11 +275,7 @@ class Actor:
                     )
                 )
 
-        # log accumulated rewards
-        LOG.info("Agent0: [dead, ep_rate, exp, hp_point, kill, last_hit, money, tower_hp_point, reward_sum]:{}".format(
-            r_sum0))
-        LOG.info("Agent1: [dead, ep_rate, exp, hp_point, kill, last_hit, money, tower_hp_point, reward_sum]:{}".format(
-            r_sum1))
+        # r_array_sum = np.array(rewards).sum(axis=1)
 
         for i, agent in enumerate(self.agents):
             if use_common_ai[i]:
@@ -322,6 +307,8 @@ class Actor:
             # print("rewards {} :".format(i),rewards[i])
             episode_infos[i]["reward"] = np.sum(rewards[i])
             episode_infos[i]["h_act_rate"] = episode_infos[i]["h_act_num"] / step
+            # LOG.info(
+            #     f"Agent:{i}: [dead, ep_rate, exp, hp_point, kill, last_hit, money, tower_hp_point, reward_sum]:{list(r_array_sum[0])}")
 
         if IS_TRAIN and not eval:
             LOG.debug("send sample_manager")
@@ -434,13 +421,15 @@ class Actor:
         last_clean = time.time()
 
         # support multi heroes
-        camp1_heros = ["gongsunli", "makeboluo", "direnjie", "luban", "houyi"]
+        # camp1_heros = ["luban", "houyi"]
+        camp1_heros = ["luban", "houyi", "direnjie"]
         camp2_heros = ["gongsunli", "makeboluo", "direnjie", "luban", "houyi"]
 
-        # change it to select heros
+        # change it to select heroes
         camp1_index = 0
         camp2_index = 0
 
+        change_hero_cnt = 0
         while True:
             hero_name1 = camp1_heros[camp1_index]
             hero_name2 = camp2_heros[camp2_index]
@@ -449,11 +438,17 @@ class Actor:
                 dict(self.ALL_CONFIG_DICT[hero_name2][1]),
             ]
 
-            camp1_index += 1
-            if camp1_index % 5 == 0:
-                # change it to select heros
-                camp1_index = 0
-                camp2_index = (camp2_index + 1) % 5
+            change_hero_cnt += 1
+            camp1_index = (camp1_index + 1) % len(camp1_heros)
+            if change_hero_cnt % 5 == 0:
+                change_hero_cnt = 0
+                camp2_index = (camp2_index + 1) % len(camp2_heros)
+
+            # camp1_index += 1
+            # if camp1_index % 5 == 0:
+            #     # change it to select heroes
+            #     camp1_index = 3
+            #     camp2_index = (camp2_index + 1) % 5
 
             print(config_dicts)
             try:
