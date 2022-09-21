@@ -470,6 +470,7 @@ class Actor:
                     cur_models.reverse()
                     swap = not swap
                 else:
+                    # eval mode settings
                     eval_with_common_ai = (
                                                   self._episode_num + 0
                                           ) % Config.EVAL_FREQ == 0 and self.m_config_id == 0
