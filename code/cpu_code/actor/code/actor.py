@@ -17,6 +17,9 @@ from rl_framework.monitor import InfluxdbMonitorHandler
 from operator import add
 
 IS_TRAIN = Config.IS_TRAIN
+
+reward_win = Config.reward_win
+
 LOG = CommonLogger.get_logger()
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 OS_ENV = os.environ
@@ -146,9 +149,15 @@ class Actor:
                 if agent.is_latest_model and not eval:
                     if state_dict[i]["reward"] is not None:
                         if type(state_dict[i]["reward"]) == tuple:
+                            # means the game not end but close game is sent
+                            if self.loss_camp == -1:
+                                win = 0
+                            else:
+                                win = -reward_win if agent.hero_camp == self.loss_camp else reward_win
+                            LOG.info(f"agent {i} loss_camp: {self.loss_camp}, win: {reward_win}")
                             # if reward is a vec
                             sample_manager.save_last_sample(
-                                agent_id=i, reward=state_dict[i]["reward"][-1]
+                                agent_id=i, reward=state_dict[i]["reward"][-1] + win
                             )
                         else:
                             # if reward is a float number
@@ -221,6 +230,8 @@ class Actor:
                 actions.append(action)
                 if action[0] == 10:
                     episode_infos[i]["h_act_num"] += 1
+
+                # only the last reward is stored
                 rewards[i].append(sample["reward"])
 
                 if agent.is_latest_model and not eval:
@@ -251,6 +262,12 @@ class Actor:
             done = d[0] or d[1]
             if req_pb.gameover:
                 print("really gameover!!!")
+
+            loss_camp = -1
+            for organ in req_pb.organ_list:
+                if organ.type == 24 and organ.hp <= 0:
+                    loss_camp = organ.camp
+            self.loss_camp = loss_camp
 
             self._save_last_sample(done, eval, sample_manager, state_dict)
             log_time_func("one_frame", end=True)
@@ -304,7 +321,6 @@ class Actor:
             else:
                 episode_infos[i]["win"] = -1 if agent.hero_camp == loss_camp else 1
 
-            # print("rewards {} :".format(i),rewards[i])
             episode_infos[i]["reward"] = np.sum(rewards[i])
             episode_infos[i]["h_act_rate"] = episode_infos[i]["h_act_num"] / step
             # LOG.info(
@@ -422,7 +438,7 @@ class Actor:
 
         # support multi heroes
         # camp1_heros = ["luban", "houyi"]
-        camp1_heros = ["luban", "houyi", "direnjie"]
+        camp1_heros = ["luban", "houyi", "direnjie", "gongsunli", "makeboluo"]
         camp2_heros = ["gongsunli", "makeboluo", "direnjie", "luban", "houyi"]
 
         # change it to select heroes

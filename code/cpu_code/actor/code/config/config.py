@@ -41,6 +41,9 @@ class Config:
     EVAL_FREQ = 5
 
 
+    reward_win = 5.0
+
+
 if __name__ == "__main__":
     print(
         np.sum(
