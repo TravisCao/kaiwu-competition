@@ -4,6 +4,7 @@
 """
 from operator import le
 import os
+from re import I
 import traceback
 import numpy as np
 from config.config import Config
@@ -16,6 +17,7 @@ import json
 import struct
 import socket
 import multiprocessing
+import json
 from operator import add
 
 IS_TRAIN = Config.IS_TRAIN
@@ -23,6 +25,10 @@ LOG = CommonLogger.get_logger()
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 OS_ENV = os.environ
 IS_DEV = OS_ENV.get("IS_DEV")
+
+with open("./config.json") as json_file:
+    reward_coef = json.load(json_file)
+reward_coef = dict(zip(reward_coef.keys(), map(float, reward_coef.values())))
 
 
 class RemoteAiServer():
@@ -230,12 +236,25 @@ class BattleActor(Actor):
 
         # log accumulated rewards
         # LOG.info(rewards)
+
+        rewards = np.array(rewards)
+        if rewards.shape[-1] == 10:
+            # https://git.code.tencent.com/aiarena/competition-3rd/issues/32
+            rewards = np.delete(rewards, 6, axis=2)
+        rewards[:, :, 0] *= reward_coef['reward_dead']
+        rewards[:, :, 1] *= reward_coef['reward_ep_rate']
+        rewards[:, :, 2] *= reward_coef['reward_exp']
+        rewards[:, :, 3] *= reward_coef['reward_hp_point']
+        rewards[:, :, 4] *= reward_coef['reward_kill']
+        rewards[:, :, 5] *= reward_coef['reward_last_hit']
+        # rewards[ :,:, 6] *= reward_coef['reward_money']
+        rewards[:, :, 6] *= reward_coef['reward_money']
+        rewards[:, :, 7] *= reward_coef['reward_tower_hp_point']
         r_array_sum = np.array(rewards).sum(axis=1)
 
-        # LOG.info(np.array(rewards).shape)
-        LOG.info("Agent0: [dead, ep_rate, exp, hp_point, kill, last_hit, money, tower_hp_point, reward_sum]:{}".format(
+        print("Agent0: [dead, ep_rate, exp, hp_point, kill, last_hit, money, tower_hp_point, reward_sum]:{}".format(
             list(r_array_sum[0])))
-        LOG.info("Agent1: [dead, ep_rate, exp, hp_point, kill, last_hit, money, tower_hp_point, reward_sum]:{}".format(
+        print("Agent1: [dead, ep_rate, exp, hp_point, kill, last_hit, money, tower_hp_point, reward_sum]:{}".format(
             list(r_array_sum[1])))
 
         # if aiprocess._model_manager.latest_version and int(self.m_config_id) != 0:

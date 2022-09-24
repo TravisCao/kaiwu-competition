@@ -61,7 +61,9 @@ CAMP_BLUE_MODEL=${1:-"./code_1.tgz"}
 CAMP_RED_MODEL=${2:-"./code_2.tgz"}
 CAMP_BLUE_HERO=${3:-"houyi"}
 CAMP_RED_HERO=${4:-"houyi"}
-GAME_ID=${5:-"gameid-20220905-164749-3"}
+# GAME_ID=${5:-"gameid-20220905-164749-3"}
+GAME_ID="$(date '+%m-%d-%H-%M')-$CAMP_BLUE_HERO-$CAMP_BLUE_MODEL-$CAMP_RED_HERO_$CAMP_RED_MODEL"
+BATTLE_NUM=${5:-1}
 
 if [[ $# -lt 2 ]]
 then
@@ -91,7 +93,7 @@ waiting_port $CAMP_BLUE_PORT 30
 waiting_port $CAMP_RED_PORT 30
 
 # 启动对局
-log "start game $GAME_ID"
+log "start game $GAME_ID, battle number: $BATTLE_NUM"
 python battle_entry.py \
                 --heroes="$CAMP_BLUE_HERO,$CAMP_RED_HERO" \
                 --game_id=$GAME_ID \
@@ -99,11 +101,11 @@ python battle_entry.py \
                 --mem_pool_addr="localhost:$MEM_POOL_PORT" \
                 --actor_id="$KAIWU_INDEX" \
                 --aiserver_paths="remote_aiserver/aiserver_$CAMP_BLUE_CODE,remote_aiserver/aiserver_$CAMP_RED_CODE" \
-                --battle_num=1 > $ROOT_LOG_DIR/"$GAME_ID"/battle.log
-                
+                --battle_num=$BATTLE_NUM > $ROOT_LOG_DIR/"$GAME_ID"/battle.log
 
 # 按照年月划分文件夹
 result_dir=${RESULT_PREFIX:-"$(date +"%Y%m")"}
 
 echo "success"
+cat $ROOT_LOG_DIR/game_log/$GAME_ID/battle.log | grep "Agent" | awk -F ":" '{print $1,$3}' >> $ROOT_LOG_DIR/game_log/$GAME_ID/rewards.log
 stop
