@@ -107,5 +107,6 @@ python battle_entry.py \
 result_dir=${RESULT_PREFIX:-"$(date +"%Y%m")"}
 
 echo "success"
-cat $ROOT_LOG_DIR/game_log/$GAME_ID/battle.log | grep "Agent" | awk -F ":" '{print $1,$3}' >> $ROOT_LOG_DIR/game_log/$GAME_ID/rewards.log
+cat $ROOT_LOG_DIR/$GAME_ID/battle.log | grep "Agent0_original:" | awk -F ":" '{print $3}' >> $ROOT_LOG_DIR/$GAME_ID/rewards_original.log
+cat $ROOT_LOG_DIR/$GAME_ID/battle.log | grep "Agent0:" | awk -F ":" '{print $3}' >> $ROOT_LOG_DIR/$GAME_ID/rewards.log
 stop
