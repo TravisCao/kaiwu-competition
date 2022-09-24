@@ -154,7 +154,8 @@ class Actor:
                                 win = 0
                             else:
                                 win = -reward_win if agent.hero_camp == self.loss_camp else reward_win
-                            LOG.info(f"agent {i} loss_camp: {self.loss_camp}, win: {reward_win}")
+                            LOG.info(
+                                f"agent {i} loss_camp: {self.loss_camp}, win: {reward_win}")
                             # if reward is a vec
                             sample_manager.save_last_sample(
                                 agent_id=i, reward=state_dict[i]["reward"][-1] + win
@@ -300,18 +301,18 @@ class Actor:
             for hero_state in req_pbs[i].hero_list:
                 if agent.player_id == hero_state.runtime_id:
                     episode_infos[i]["money_per_frame"] = (
-                            hero_state.moneyCnt / game_info["length"]
+                        hero_state.moneyCnt / game_info["length"]
                     )
                     episode_infos[i]["kill"] = hero_state.killCnt
                     episode_infos[i]["death"] = hero_state.deadCnt
                     episode_infos[i]["hurt_per_frame"] = (
-                            hero_state.totalHurt / game_info["length"]
+                        hero_state.totalHurt / game_info["length"]
                     )
                     episode_infos[i]["hurtH_per_frame"] = (
-                            hero_state.totalHurtToHero / game_info["length"]
+                        hero_state.totalHurtToHero / game_info["length"]
                     )
                     episode_infos[i]["hurtBH_per_frame"] = (
-                            hero_state.totalBeHurtByHero / game_info["length"]
+                        hero_state.totalBeHurtByHero / game_info["length"]
                     )
                     episode_infos[i]["hero_id"] = self.HERO_DICT[env_config[0]["hero"]]
                     episode_infos[i]["totalHurtToHero"] = hero_state.totalHurtToHero
@@ -319,7 +320,8 @@ class Actor:
             if loss_camp == -1:
                 episode_infos[i]["win"] = 0
             else:
-                episode_infos[i]["win"] = -1 if agent.hero_camp == loss_camp else 1
+                episode_infos[i]["win"] = - \
+                    1 if agent.hero_camp == loss_camp else 1
 
             episode_infos[i]["reward"] = np.sum(rewards[i])
             episode_infos[i]["h_act_rate"] = episode_infos[i]["h_act_num"] / step
@@ -438,8 +440,8 @@ class Actor:
 
         # support multi heroes
         # camp1_heros = ["luban", "houyi"]
-        camp1_heros = ["luban", "houyi", "direnjie", "gongsunli", "makeboluo"]
-        camp2_heros = ["gongsunli", "makeboluo", "direnjie", "luban", "houyi"]
+        camp2_heros = ["gongsunli", "makeboluo"]
+        camp1_heros = ["gongsunli", "makeboluo"]
 
         # change it to select heroes
         camp1_index = 0
@@ -488,8 +490,8 @@ class Actor:
                 else:
                     # eval mode settings
                     eval_with_common_ai = (
-                                                  self._episode_num + 0
-                                          ) % Config.EVAL_FREQ == 0 and self.m_config_id == 0
+                        self._episode_num + 0
+                    ) % Config.EVAL_FREQ == 0 and self.m_config_id == 0
                     self._run_episode(
                         config_dicts, eval_with_common_ai, load_models=load_models
                     )
