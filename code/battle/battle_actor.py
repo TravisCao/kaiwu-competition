@@ -66,7 +66,8 @@ def remote_predict(input_queue, sock, output_queue, iq_lock, oq_lock):
         send_data_bytes = json.dumps(state).encode("utf-8")
         empty_bytes = b" "
         data_len = len(send_data_bytes)
-        all_data_bytes = send_data_bytes + (8192 - (len(send_data_bytes) + 4 * 3) % 8192) * empty_bytes
+        all_data_bytes = send_data_bytes + \
+            (8192 - (len(send_data_bytes) + 4 * 3) % 8192) * empty_bytes
         pkg_len = len(all_data_bytes)
         data_len_bytes = struct.pack("I", data_len)
         pkg_len_bytes = struct.pack("I", pkg_len)
@@ -99,7 +100,8 @@ class BattleActor(Actor):
                        env)
 
         if len(agents) != 2 or len(hero_configs) != 2:
-            raise Exception("BattleActor only support 2 agents and 3 hero_configs")
+            raise Exception(
+                "BattleActor only support 2 agents and 3 hero_configs")
 
         self.hero1_config = hero_configs[0]
         self.hero2_config = hero_configs[1]
@@ -110,8 +112,10 @@ class BattleActor(Actor):
         self.output_queues = []
         self.output_queues.append(multiprocessing.Queue())
         self.output_queues.append(multiprocessing.Queue())
-        self.input_queue_locks = [multiprocessing.Lock(), multiprocessing.Lock()]
-        self.output_queue_locks = [multiprocessing.Lock(), multiprocessing.Lock()]
+        self.input_queue_locks = [
+            multiprocessing.Lock(), multiprocessing.Lock()]
+        self.output_queue_locks = [
+            multiprocessing.Lock(), multiprocessing.Lock()]
         self.processings = []
         for i, agent in enumerate(self.agents):
             p = multiprocessing.Process(target=remote_predict, args=(
@@ -241,6 +245,12 @@ class BattleActor(Actor):
         if rewards.shape[-1] == 10:
             # https://git.code.tencent.com/aiarena/competition-3rd/issues/32
             rewards = np.delete(rewards, 6, axis=2)
+        r_array_sum = np.array(rewards).sum(axis=1)
+        print("Agent0_original: [dead, ep_rate, exp, hp_point, kill, last_hit, money, tower_hp_point, reward_sum]:{}".format(
+            list(r_array_sum[0])))
+        print("Agent1_original: [dead, ep_rate, exp, hp_point, kill, last_hit, money, tower_hp_point, reward_sum]:{}".format(
+            list(r_array_sum[1])))
+
         rewards[:, :, 0] *= reward_coef['reward_dead']
         rewards[:, :, 1] *= reward_coef['reward_ep_rate']
         rewards[:, :, 2] *= reward_coef['reward_exp']
@@ -309,7 +319,8 @@ class BattleActor(Actor):
         while True:
             try:
                 # provide a init eval value at the first episode
-                battle_info = "{} vs {}, {}/{}".format(agent_0, agent_1, cur_battle_cnt, eval_number)
+                battle_info = "{} vs {}, {}/{}".format(
+                    agent_0, agent_1, cur_battle_cnt, eval_number)
                 self._run_episode(config_dicts, True, load_models=load_models,
                                   game_id=game_id + "-{}".format(cur_battle_cnt), eval_info=battle_info)
                 # battle_result[str(self._episode_num)]=str(self.episode_infos[0]["win"])+"-"+str(self.episode_infos[1]["win"])
@@ -318,7 +329,8 @@ class BattleActor(Actor):
                 self._episode_num += 1
                 repeat_num = MAX_REPEAT_ERR_NUM
             except Exception as e:
-                LOG.error("_run_episode err: {}/{}".format(repeat_num, MAX_REPEAT_ERR_NUM))
+                LOG.error(
+                    "_run_episode err: {}/{}".format(repeat_num, MAX_REPEAT_ERR_NUM))
                 LOG.error(e)
                 traceback.print_tb(e.__traceback__)
                 # print(e.__traceback__.tb_frame.f_globals["__file__"])
