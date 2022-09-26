@@ -25,14 +25,12 @@ def cvt_infer_list_to_numpy_list(infer_list):
     data_list = [infer.data for infer in infer_list]
     return data_list
 
-
 class RandomAgent:
     def process(self, feature, legal_action):
         action = [random.randint(0, 2) - 1, random.randint(0, 2) - 1]
         value = [0.0]
         neg_log_pi = [0]
         return action, value, neg_log_pi
-
 
 class Agent:
     def __init__(
