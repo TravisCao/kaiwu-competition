@@ -15,9 +15,11 @@ from framework.common.common_log import g_log_time
 from framework.common.common_func import log_time_func
 from rl_framework.monitor import InfluxdbMonitorHandler
 from operator import add
-
+from absl import flags
+from agent import Agent as Agent
+from algorithms.model.model import Model
 IS_TRAIN = Config.IS_TRAIN
-
+FLAGS = flags.FLAGS
 reward_win = Config.reward_win
 
 LOG = CommonLogger.get_logger()
@@ -82,6 +84,15 @@ class Actor:
 
     # def __init__(self, id, type):
     def __init__(self, id, agents, max_episode: int = 0, env=None, gpu_ip="127.0.0.1"):
+        #common eval ai
+        self.eval_ai = Agent(
+                Model,
+                FLAGS.model_pool_addr.split(";"),
+                keep_latest=False,
+                local_mode=True,
+            )
+        self.eval_ai.reset(Config.ENEMY_TYPE,"eval_ai")
+
         self.m_config_id = id
         self.m_task_uuid = Config.TASK_UUID
         self.m_episode_info = deque(maxlen=100)
@@ -131,10 +142,12 @@ class Actor:
             LOG.debug("reset agent {}".format(i))
             if eval:
                 if load_models is None or len(load_models) < 2:
-                    agent.reset("common_ai")
+                    # agent = self.eval_ai
+                    agent.reset(Config.ENEMY_TYPE,"eval_ai")
                 else:
                     if load_models[i] is None:
-                        agent.reset("common_ai")
+                        # agent = self.eval_ai
+                        agent.reset(Config.ENEMY_TYPE,"eval_ai")
                     else:
                         agent.reset("network", model_path=load_models[i])
             else:
@@ -178,7 +191,7 @@ class Actor:
         LOG.debug("reset env")
         LOG.info(env_config)
         use_common_ai = self._get_common_ai(eval, load_models)
-
+        use_eval_ai = [False] * len(self.agents)
         # ATTENTION: agent.reset() loads models from local file which cost a lot of time.
         #            Before upload your code, please check your code to avoid ANY time-wasting
         #            operations between env.reset() and env.close_game(). Any TIMEOUT in a round
@@ -190,7 +203,7 @@ class Actor:
         # restart a new game
         # reward :[dead,ep_rate,exp,hp_point,kill,last_hit,money,tower_hp_point,reward_sum]
         _, r, d, state_dict = self.env.reset(
-            env_config, use_common_ai=use_common_ai, eval=eval, render=render
+            env_config, use_common_ai=use_eval_ai, eval=eval, render=render
         )
         if state_dict[0] is None:
             game_id = state_dict[1]["game_id"]
@@ -219,11 +232,12 @@ class Actor:
             actions = []
             log_time_func("agent_process")
             for i, agent in enumerate(self.agents):
-                if use_common_ai[i]:
-                    actions.append(None)
-                    rewards[i].append(0.0)
-                    continue
+                # if use_common_ai[i]:
+                #     actions.append(None)
+                #     rewards[i].append(0.0)
+                #     continue
                 # print("agent{}".format(i),state_dict[i]['observation'])
+                # LOG.info("agent{} obs:{}".format(i,state_dict[i]['legal_action']))
                 action, d_action, sample = agent.process(state_dict[i])
                 if eval:
                     action = d_action
@@ -362,6 +376,7 @@ class Actor:
         LOG.info("=" * 50)
         for i, agent in enumerate(self.agents):
             if common_ai[i]:
+                LOG.info("Agent is eval_ai, skip!")
                 continue
             LOG.info(
                 "Agent is_main:{}, type:{}, camp:{},reward:{:.3f}, win:{}, win_{}:{},h_act_rate:{}".format(
@@ -390,6 +405,8 @@ class Actor:
                         "reward": episode_infos[i]["reward"],
                     }
                 )
+                if episode_infos[i]["win"] == -1 and eval:
+                    episode_infos[i]["win"] = 0
                 self.upload_monitor_data(
                     {
                         "win": episode_infos[i]["win"],
