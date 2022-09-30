@@ -20,6 +20,7 @@ class Algorithm:
         self.is_reinforce_task_list = Config.IS_REINFORCE_TASK_LIST
         self.min_policy = Config.MIN_POLICY
         self.clip_param = Config.CLIP_PARAM
+        # TODO: 16 is the LSTM steps?
         self.batch_size = Config.BATCH_SIZE * 16
         self.restore_list = []
         self.var_beta = self.m_var_beta
@@ -120,13 +121,18 @@ class Algorithm:
         # we can set the global step here for optimizer
         self.set_global_step(update)
 
+        # one batch_size is of LSTM_STEPS * features dimension
+
         # add split datas
         data_list = tf.split(datas, self.cut_points, axis=1)
         #  the meaning of each data in data_list should be as the same as that in GpuProxy.py
         for i, data in enumerate(data_list):
+            # a shape of [-1] flattens intso 1-D
             data = tf.reshape(data, [-1])
             data_list[i] = tf.cast(data, dtype=tf.float32)
         seri_vec = data_list[0]
+
+        # (batch_size * (feature_size * LSTM_STEPS))
         seri_vec = tf.reshape(seri_vec, [-1, self.data_split_shape[0]])
 
         reward = data_list[1]
@@ -188,23 +194,43 @@ class Algorithm:
             init_lstm_hidden,
         )
         # calculate loss
-        loss = self._calculate_loss(
-            label_list,
-            old_label_probability_list,
-            fc_label_result_list[:-1],
-            reward,
-            advantage,
-            fc_label_result_list[-1],
-            seri_vec,
-            is_train,
-            weight_list,
-        )
-        info_list = {
-            "loss": loss,
-            "value_cost": self.value_cost,
-            "entropy_cost": self.entropy_cost,
-            "policy_cost": self.policy_cost,
-        }
+        if not Config.distillation:
+            loss = self._calculate_loss(
+                label_list,
+                old_label_probability_list,
+                fc_label_result_list[:-1],
+                reward,
+                advantage,
+                fc_label_result_list[-1],
+                seri_vec,
+                is_train,
+                weight_list,
+            )
+            info_list = {
+                "loss": loss,
+                "value_cost": self.value_cost,
+                "entropy_cost": self.entropy_cost,
+                "policy_cost": self.policy_cost,
+            }
+        else:
+            loss = self._calculate_loss_distillation(
+                label_list,
+                old_label_probability_list,
+                fc_label_result_list[:-1],
+                reward,
+                advantage,
+                fc_label_result_list[-1],
+                seri_vec,
+                is_train,
+                weight_list,
+            )
+            info_list = {
+                "loss": loss,
+                "value_cost": self.value_cost,
+                "entropy_cost": self.entropy_cost,
+                "policy_cost": self.policy_cost,
+            }
+
 
         return loss, info_list
 
@@ -238,6 +264,141 @@ class Algorithm:
             weight_list.append(tf.squeeze(weight, axis=[1]))
         frame_is_train = tf.squeeze(unsqueeze_frame_is_train, axis=[1])
         return reward, advantage, label_list, frame_is_train, weight_list
+
+    def _calculate_loss_distillation(
+        self,
+        unsqueeze_teacher_label_list,
+        teacher_label_prob_list,
+        student_label_list,
+        unsqueeze_teacher_value,
+        unsqueeze_advantage,
+        student_value_result,
+        seri_vec,
+        unsqueeze_is_train,
+        unsqueeze_weight_list,
+    ):
+        # in policy distillation:
+        # the reward position is replaced by teacher model value
+        # in the sample manager
+        (
+            teacher_value,
+            advantage,
+            teacher_label_list,
+            _,
+            weight_list,
+        ) = self._squeeze_tensor(
+            unsqueeze_teacher_value,
+            unsqueeze_advantage,
+            unsqueeze_teacher_label_list,
+            unsqueeze_is_train,
+            unsqueeze_weight_list,
+        )
+        _, split_feature_legal_action = tf.split(
+            seri_vec,
+            [
+                np.prod(self.seri_vec_split_shape[0]),
+                np.prod(self.seri_vec_split_shape[1]),
+            ],
+            axis=1,
+        )
+        feature_legal_action_shape = list(self.seri_vec_split_shape[1])
+        feature_legal_action_shape.insert(0, -1)
+        feature_legal_action = tf.reshape(
+            split_feature_legal_action, feature_legal_action_shape
+        )
+        # self.feature_legal_action = feature_legal_action
+
+        legal_action_flag_list = tf.split(
+            feature_legal_action, self.label_size_list, axis=1
+        )
+
+        # loss of value net
+        student_value_result_squeezed = tf.squeeze(student_value_result, axis=[1])
+        self.value_cost = 0.5 * tf.reduce_mean(
+            tf.square(teacher_value - student_value_result_squeezed), axis=0
+        )
+        # new_advantage = teacher_value - student_value_result_squeezed
+        # self.value_cost = 0.5 * tf.reduce_mean(tf.square(new_advantage), axis=0)
+
+        # TODO: policy cost
+
+        # for entropy loss calculate
+        label_logits_subtract_max_list = []
+        label_sum_exp_logits_list = []
+        label_probability_list = []
+        # policy loss: ppo clip loss
+        self.policy_cost = tf.constant(0.0, dtype=tf.float32)
+        for task_index in range(len(self.is_reinforce_task_list)):
+            if self.is_reinforce_task_list[task_index]:
+                legal_action_flag_list_max_mask = (
+                    1 - legal_action_flag_list[task_index]
+                ) * tf.pow(10.0, 20.0)
+                label_logits_subtract_max = tf.clip_by_value(
+                    (
+                        student_label_list[task_index]
+                        - tf.reduce_max(
+                            student_label_list[task_index]
+                            - legal_action_flag_list_max_mask,
+                            axis=1,
+                            keep_dims=True,
+                        )
+                    ),
+                    -tf.pow(10.0, 20.0),
+                    1,
+                )
+                label_logits_subtract_max_list.append(label_logits_subtract_max)
+                label_exp_logits = (
+                    legal_action_flag_list[task_index]
+                    * tf.exp(label_logits_subtract_max)
+                    + self.min_policy
+                )
+                label_sum_exp_logits = tf.reduce_sum(
+                    label_exp_logits, axis=1, keep_dims=True
+                )
+                label_sum_exp_logits_list.append(label_sum_exp_logits)
+                label_probability = 1.0 * label_exp_logits / label_sum_exp_logits
+                label_probability_list.append(label_probability)
+                # policy_p = tf.reduce_sum(one_hot_actions * label_probability, axis=1)
+                # policy_log_p = tf.log(policyp + 0.00001)
+                # teacher_policy_p = tf.reduce_sum(
+                #     one_hot_actions * teacher_label_prob_list[task_index] + 0.00001,
+                #     axis=1,
+                # )
+                # teacher_policy_log_p = tf.log(teacher_policy_p)
+
+                # cross entropy loss over two distributions
+                temp_policy_loss = -tf.reduce_sum(
+                    teacher_label_prob_list[task_index]
+                    * legal_action_flag_list[task_index]
+                    * tf.log(
+                        label_probability_list[task_index] + 0.00001
+                    ),
+                    axis=1,
+                )
+
+                temp_policy_loss = -tf.reduce_sum(
+                    (temp_policy_loss * tf.to_float(weight_list[task_index]))
+                ) / tf.maximum(
+                    tf.reduce_sum(tf.to_float(weight_list[task_index])), 1.0
+                )  # add - because need to minize
+                self.policy_cost = self.policy_cost + temp_policy_loss
+
+        # sum all type cost
+        self.cost_all = (
+            self.value_cost + self.policy_cost
+        )
+        # in monitor, the entropy cost represents the policy cost
+        self.entropy_cost = self.policy_cost
+
+        # make output information
+        # add loss information
+        self.all_loss_list = [
+            self.cost_all,
+            self.value_cost,
+            self.policy_cost,
+            self.entropy_cost
+        ]
+        return self.cost_all
 
     def _calculate_loss(
         self,
@@ -986,6 +1147,7 @@ class Algorithm:
                 shape=[-1, self.target_embed_dim, 1],
                 name="reshape_target_embed",
             )
+            # attention part
             fc3_label_result = tf.matmul(
                 ulti_tar_embedding, reshape_fc2_label_result
             )  # (Batch_size,unit_num,1)
