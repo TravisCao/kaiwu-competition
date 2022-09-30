@@ -18,6 +18,7 @@ from operator import add
 from absl import flags
 from agent import Agent as Agent
 from algorithms.model.model import Model
+from itertools import chain, repeat
 IS_TRAIN = Config.IS_TRAIN
 FLAGS = flags.FLAGS
 reward_win = Config.reward_win
@@ -424,11 +425,6 @@ class Actor:
                 )
                 self.upload_monitor_data(
                     {
-                        "money_per_frame": episode_infos[i]["money_per_frame"],
-                    }
-                )
-                self.upload_monitor_data(
-                    {
                         "totalHurtToHero": episode_infos[i]["totalHurtToHero"],
                     }
                 )
@@ -456,9 +452,13 @@ class Actor:
         last_clean = time.time()
 
         # support multi heroes
-        # camp1_heros = ["luban", "houyi"]
-        camp2_heros = ["gongsunli", "makeboluo"]
-        camp1_heros = ["gongsunli", "makeboluo"]
+        # camp1_heros = ["luban"]
+        # camp2_heros = ["luban", "houyi", "gongsunli", "direnjie", "makeboluo"]
+
+        heros = ["luban", "houyi", "gongsunli", "direnjie", "makeboluo"]
+        heros_count = [1, 1, 1, 1, 1]
+        
+        camp1_heros = camp2_heros = list(chain.from_iterable(map(repeat, heros, heros_count)))
 
         # change it to select heroes
         camp1_index = 0

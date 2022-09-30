@@ -22,7 +22,7 @@ class DimConfig:
 
 class ModelConfig:
 
-    first_decay_steps = 1000
+    first_decay_steps = 20000
     use_lr_decay = True
 
     NETWORK_NAME = "network"
@@ -55,7 +55,7 @@ class ModelConfig:
         512,
     ]
     SERI_VEC_SPLIT_SHAPE = [(725,), (84,)]
-    INIT_LEARNING_RATE_START = 0.0001
+    INIT_LEARNING_RATE_START = 4e-5
     BETA_START = 0.025
     LOG_EPSILON = 1e-6
     LABEL_SIZE_LIST = [12, 16, 16, 16, 16, 8]
@@ -126,13 +126,13 @@ class ModelConfig:
 
 
 class Config:
-    slow_time = 0.03
+    slow_time = 0.025
     TRAIN_MODE = 0
     EVAL_MODE = 1
     BATTLE_MODE = 2
     AISERVERPORT = [10010, 10011]
     # kinghonour: 1e-5 atari: 2.5e-4
-    INIT_LEARNING_RATE = 1e-4
+    INIT_LEARNING_RATE = 3e-5
     END_LEARNING_RATE = 1e-5
     ALPHA = 0.5
     BETA = 0.01
