@@ -466,10 +466,15 @@ class Actor:
         # camp2_heros = ["luban", "houyi", "gongsunli", "direnjie", "makeboluo"]
 
         heros = ["luban", "houyi", "gongsunli", "direnjie", "makeboluo"]
-        heros_count = [1, 1, 1, 1, 1]
+        heros_count1 = [1, 1, 1, 1, 1]
+        heros_count2 = [1, 1, 1, 1, 1]
 
-        camp1_heros = camp2_heros = list(
-            chain.from_iterable(map(repeat, heros, heros_count))
+        camp1_heros = list(
+            chain.from_iterable(map(repeat, heros, heros_count1))
+        )
+
+        camp2_heros = list(
+            chain.from_iterable(map(repeat, heros, heros_count2))
         )
 
         # change it to select heroes
