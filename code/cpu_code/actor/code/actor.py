@@ -19,6 +19,7 @@ from absl import flags
 from agent import Agent as Agent
 from algorithms.model.model import Model
 from itertools import chain, repeat
+
 IS_TRAIN = Config.IS_TRAIN
 FLAGS = flags.FLAGS
 reward_win = Config.reward_win
@@ -85,14 +86,6 @@ class Actor:
 
     # def __init__(self, id, type):
     def __init__(self, id, agents, max_episode: int = 0, env=None, gpu_ip="127.0.0.1"):
-        #common eval ai
-        self.eval_ai = Agent(
-                Model,
-                FLAGS.model_pool_addr.split(";"),
-                keep_latest=False,
-                local_mode=True,
-            )
-        self.eval_ai.reset(Config.ENEMY_TYPE,"eval_ai")
 
         self.m_config_id = id
         self.m_task_uuid = Config.TASK_UUID
@@ -143,12 +136,10 @@ class Actor:
             LOG.debug("reset agent {}".format(i))
             if eval:
                 if load_models is None or len(load_models) < 2:
-                    # agent = self.eval_ai
-                    agent.reset(Config.ENEMY_TYPE,"eval_ai")
+                    agent.reset(Config.ENEMY_TYPE, "eval_ai")
                 else:
                     if load_models[i] is None:
-                        # agent = self.eval_ai
-                        agent.reset(Config.ENEMY_TYPE,"eval_ai")
+                        agent.reset(Config.ENEMY_TYPE, "eval_ai")
                     else:
                         agent.reset("network", model_path=load_models[i])
             else:
@@ -167,9 +158,14 @@ class Actor:
                             if self.loss_camp == -1:
                                 win = 0
                             else:
-                                win = -reward_win if agent.hero_camp == self.loss_camp else reward_win
+                                win = (
+                                    -reward_win
+                                    if agent.hero_camp == self.loss_camp
+                                    else reward_win
+                                )
                             LOG.info(
-                                f"agent {i} loss_camp: {self.loss_camp}, win: {reward_win}")
+                                f"agent {i} loss_camp: {self.loss_camp}, win: {reward_win}"
+                            )
                             # if reward is a vec
                             sample_manager.save_last_sample(
                                 agent_id=i, reward=state_dict[i]["reward"][-1] + win
@@ -335,8 +331,7 @@ class Actor:
             if loss_camp == -1:
                 episode_infos[i]["win"] = 0
             else:
-                episode_infos[i]["win"] = - \
-                    1 if agent.hero_camp == loss_camp else 1
+                episode_infos[i]["win"] = -1 if agent.hero_camp == loss_camp else 1
 
             episode_infos[i]["reward"] = np.sum(rewards[i])
             episode_infos[i]["h_act_rate"] = episode_infos[i]["h_act_num"] / step
@@ -355,7 +350,7 @@ class Actor:
         )
 
     def _print_info(
-            self, game_id, game_info, episode_infos, eval, eval_info="", common_ai=None
+        self, game_id, game_info, episode_infos, eval, eval_info="", common_ai=None
     ):
         if common_ai is None:
             common_ai = [False] * len(self.agents)
@@ -457,8 +452,10 @@ class Actor:
 
         heros = ["luban", "houyi", "gongsunli", "direnjie", "makeboluo"]
         heros_count = [1, 1, 1, 1, 1]
-        
-        camp1_heros = camp2_heros = list(chain.from_iterable(map(repeat, heros, heros_count)))
+
+        camp1_heros = camp2_heros = list(
+            chain.from_iterable(map(repeat, heros, heros_count))
+        )
 
         # change it to select heroes
         camp1_index = 0
