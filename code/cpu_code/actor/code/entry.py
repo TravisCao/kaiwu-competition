@@ -32,7 +32,6 @@ flags.DEFINE_boolean("single_test", 0, "test_mode")
 flags.DEFINE_string("gamecore_path", "~/.hok", "installation path of gamecore")
 flags.DEFINE_string("game_log_path", "./game_log", "log path for game information")
 
-
 MAP_SIZE = 100
 AGENT_NUM = 2
 
@@ -102,6 +101,20 @@ def gc_as_lib(argv):
             )
         )
 
+    if Config.distillation:
+        teacher_agents = [
+            Agent(
+                Model,
+                FLAGS.model_pool_addr.split(";"),
+                keep_latest=False,
+                local_mode=True,
+            )
+            for _ in range(5)
+        ]
+        teacher_agents = dict(zip(Config.hero_names, teacher_agents))
+        for hero in Config.hero_names:
+            teacher_agents[hero].reset(Config.ENEMY_TYPE, Config.teacher_model_paths[hero])
+
     sample_manager = SampleManager(
         mem_pool_addr=FLAGS.mem_pool_addr,
         mem_pool_type="zmq",
@@ -109,13 +122,13 @@ def gc_as_lib(argv):
         game_id=game_id_init,
         local_mode=eval_mode,
     )
-    actor = Actor(
-        id=actor_id,
-        agents=agents,
-        gpu_ip=FLAGS.mem_pool_addr.split(":")[0]
-    )
+    actor = Actor(id=actor_id, agents=agents, gpu_ip=FLAGS.mem_pool_addr.split(":")[0])
     actor.set_sample_managers(sample_manager)
     actor.set_env(env)
+
+    if Config.distillation:
+        actor.set_teacher_agents(teacher_agents)
+
     actor.run(eval_mode=eval_mode, eval_number=eval_number, load_models=load_models)
 
 

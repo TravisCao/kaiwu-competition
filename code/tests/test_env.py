@@ -1,4 +1,19 @@
 import os
+import os.path
+import sys
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_dir)
+# root path
+root_dir = os.path.dirname(current_dir)
+common_dir = os.path.join(root_dir, "common")
+sys.path.append(common_dir)
+
+# cpu_code
+actor_dir = os.path.join(root_dir, "cpu_code", "actor", "code")
+sys.path.append(actor_dir)
+
+
 import random
 
 import numpy as np
@@ -55,6 +70,7 @@ def _generate_legal_action(env, states, common_ai):
 
 
 def test_send_action(env, common_ai=None, eval=False, config_dicts=None):
+    import pickle
     while True:
         if config_dicts is None:
             config_dicts = [{"hero": "luban", "skill": "rage"} for _ in range(2)]
@@ -81,6 +97,28 @@ def test_send_action(env, common_ai=None, eval=False, config_dicts=None):
             #     break
         env.close_game()
         print(state)
+
+def test_agent_action(env, config_dicts=None):
+    import pickle
+    import pdb
+    from agent import Agent as Agent
+    from algorithms.model.sample_manager import SampleManager as SampleManager
+    from algorithms.model.model import Model
+    _, reward, done, state = env.reset(
+        use_common_ai=[False, False], eval=False, config_dicts=config_dicts, render=None
+    )
+    env.close_game()
+    pdb.set_trace()
+    agent = Agent(
+            Model,
+            ['localhost:35200'],
+            keep_latest=True,
+            local_mode=False,
+        )
+    agent.reset("network", "eval_ai")
+    action, d_action, sample = agent.process(state[0])
+    # pdb.set_trace()
+    print()
 
 
 if __name__ == "__main__":
@@ -169,9 +207,15 @@ if __name__ == "__main__":
     ]
     # for i, h in enumerate(hero_list):
     #     print("=" * 15 + "test hero {}, {}/{}".format(h, i, len(hero_list)))
-    test_send_action(
+
+    # test_send_action(
+    #     env,
+    #     common_ai=[False, False],
+    #     eval=False,
+    #     config_dicts=[{"hero": "diaochan","skill":"rage"} for _ in range(2)],
+    # )
+
+    test_agent_action(
         env,
-        common_ai=[False, False],
-        eval=False,
         config_dicts=[{"hero": "diaochan","skill":"rage"} for _ in range(2)],
     )

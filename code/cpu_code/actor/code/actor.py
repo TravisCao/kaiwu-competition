@@ -122,6 +122,9 @@ class Actor:
         self.monitor_logger.addHandler(monitor_handler)
         self.render = None
 
+    def set_teacher_agents(self, agents):
+        self.teacher_agents = agents
+
     def upload_monitor_data(self, data: dict):
         self.monitor_logger.info(data)
 
@@ -154,6 +157,7 @@ class Actor:
                     agent.reset(Config.ENEMY_TYPE, "eval_ai")
                 else:
                     if load_models[i] is None:
+                        LOG.info("Use eval_ai")
                         agent.reset(Config.ENEMY_TYPE, "eval_ai")
                     else:
                         agent.reset("network", model_path=load_models[i])
@@ -192,6 +196,179 @@ class Actor:
                             )
                     else:
                         sample_manager.save_last_sample(agent_id=i, reward=0)
+    
+
+    def _run_episode_distillation(self, env_config, eval=False, load_models=None, eval_info=""):
+        for item in g_log_time.items():
+            g_log_time[item[0]] = []
+        sample_manager = self.m_sample_manager
+        done = False
+        log_time_func("reset")
+        log_time_func("one_episode")
+        LOG.debug("reset env")
+        LOG.info("run_episode distillation")
+        LOG.info(env_config)
+        use_common_ai = self._get_common_ai(eval, load_models)
+        use_eval_ai = [False] * len(self.agents)
+
+        hero_name1 = env_config[0]["hero"]
+        hero_name2 = env_config[1]["hero"]
+        teacher_agents = [
+            self.teacher_agents[hero_name1],
+            self.teacher_agents[hero_name2],
+        ]
+        self._reload_agents(eval, load_models)
+        render = self.render if eval else None
+        # restart a new game
+        # reward :[dead,ep_rate,exp,hp_point,kill,last_hit,money,tower_hp_point,reward_sum]
+        _, r, d, state_dict = self.env.reset(
+            env_config, use_common_ai=use_eval_ai, eval=eval, render=render
+        )
+        if state_dict[0] is None:
+            game_id = state_dict[1]["game_id"]
+        else:
+            game_id = state_dict[0]["game_id"]
+
+        # update agents' game information
+        for i, agent in enumerate(self.agents):
+            player_id = self.env.player_list[i]
+            camp = self.env.player_camp.get(player_id)
+            agent.set_game_info(camp, player_id)
+
+        # reset mem pool and models
+        LOG.debug("reset sample_manager")
+
+        sample_manager.reset(agents=self.agents, game_id=game_id)
+        rewards = [[], []]
+        step = 0
+        log_time_func("reset", end=True)
+        game_info = {}
+        episode_infos = [{"h_act_num": 0} for _ in self.agents]
+
+        while not done:
+            log_time_func("one_frame")
+            # while True:
+            # actions = [] # action of student model
+            actions_t = [] # action of teacher model
+            log_time_func("agent_process")
+            for i, agent in enumerate(self.agents):
+                # student models explores the env
+                action_t, d_action_t, sample_t = teacher_agents[i].process(state_dict[i])
+                # action, d_action, sample = agent.process(state_dict[i])
+                if eval:
+                    # action = d_action
+                    action_t = d_action_t
+                # actions.append(action)
+                actions_t.append(action_t)
+                if action_t[0] == 10:
+                    # TODO: check what is h_act_num
+                    episode_infos[i]["h_act_num"] += 1
+
+                # only the last reward is stored
+                # store student reward
+                rewards[i].append(sample_t["reward"])
+
+                if agent.is_latest_model and not eval:
+                    # save teachers sample for updating student
+                    sample_manager.save_sample(
+                        **sample_t, agent_id=i, game_id=game_id, uuid=self.m_task_uuid
+                    )
+            log_time_func("agent_process", end=True)
+
+            log_time_func("step")
+
+            # reward :[dead,ep_rate,exp,hp_point,kill,last_hit,money,tower_hp_point,reward_sum]
+            # studend-driven: let student model to explore the environment
+            _, r, d, state_dict = self.env.step(actions_t)
+
+            log_time_func("step", end=True)
+
+            req_pbs = self.env.cur_req_pb
+            if req_pbs[0] is None:
+                req_pb = req_pbs[1]
+            else:
+                req_pb = req_pbs[0]
+            LOG.debug(
+                "step: {}, frame_no: {}, reward: {}, {}".format(
+                    step, req_pb.frame_no, r[0], r[1]
+                )
+            )
+            step += 1
+            done = d[0] or d[1]
+            if req_pb.gameover:
+                print("really gameover!!!")
+
+            loss_camp = -1
+            for organ in req_pb.organ_list:
+                if organ.type == 24 and organ.hp <= 0:
+                    loss_camp = organ.camp
+            self.loss_camp = loss_camp
+
+            self._save_last_sample(done, eval, sample_manager, state_dict)
+            log_time_func("one_frame", end=True)
+
+        self.env.close_game()
+
+        # determine which camp is lost
+        game_info["length"] = req_pb.frame_no
+        loss_camp = -1
+        camp_hp = {}
+        all_camp_list = []
+        for organ in req_pb.organ_list:
+            if organ.type == 24:
+                if organ.hp <= 0:
+                    loss_camp = organ.camp
+                camp_hp[organ.camp] = organ.hp
+                all_camp_list.append(organ.camp)
+            if organ.type in [21, 24]:
+                LOG.info(
+                    "Tower {} in camp {}, hp: {}".format(
+                        organ.type, organ.camp, organ.hp
+                    )
+                )
+
+        for i, agent in enumerate(self.agents):
+            if use_common_ai[i]:
+                continue
+            for hero_state in req_pbs[i].hero_list:
+                if agent.player_id == hero_state.runtime_id:
+                    episode_infos[i]["money_per_frame"] = (
+                        hero_state.moneyCnt / game_info["length"]
+                    )
+                    episode_infos[i]["kill"] = hero_state.killCnt
+                    episode_infos[i]["death"] = hero_state.deadCnt
+                    episode_infos[i]["hurt_per_frame"] = (
+                        hero_state.totalHurt / game_info["length"]
+                    )
+                    episode_infos[i]["hurtH_per_frame"] = (
+                        hero_state.totalHurtToHero / game_info["length"]
+                    )
+                    episode_infos[i]["hurtBH_per_frame"] = (
+                        hero_state.totalBeHurtByHero / game_info["length"]
+                    )
+                    episode_infos[i]["hero_id"] = self.HERO_DICT[env_config[0]["hero"]]
+                    episode_infos[i]["totalHurtToHero"] = hero_state.totalHurtToHero
+                    break
+            if loss_camp == -1:
+                episode_infos[i]["win"] = 0
+            else:
+                episode_infos[i]["win"] = -1 if agent.hero_camp == loss_camp else 1
+
+            episode_infos[i]["reward"] = np.sum(rewards[i])
+            episode_infos[i]["h_act_rate"] = episode_infos[i]["h_act_num"] / step
+            # LOG.info(
+            #     f"Agent:{i}: [dead, ep_rate, exp, hp_point, kill, last_hit, money, tower_hp_point, reward_sum]:{list(r_array_sum[0])}")
+
+        if IS_TRAIN and not eval:
+            LOG.debug("send sample_manager")
+            sample_manager.send_samples()
+            LOG.debug("send done.")
+
+        log_time_func("one_episode", end=True)
+        # print game information
+        self._print_info(
+            game_id, game_info, episode_infos, eval, eval_info, common_ai=use_common_ai
+        )
 
     def _run_episode(self, env_config, eval=False, load_models=None, eval_info=""):
         for item in g_log_time.items():
@@ -237,23 +414,15 @@ class Actor:
         game_info = {}
         episode_infos = [{"h_act_num": 0} for _ in self.agents]
 
-        cnt = 0
         while not done:
             log_time_func("one_frame")
             # while True:
             actions = []
             log_time_func("agent_process")
             for i, agent in enumerate(self.agents):
-                # if use_common_ai[i]:
-                #     actions.append(None)
-                #     rewards[i].append(0.0)
-                #     continue
-                # print("agent{}".format(i),state_dict[i]['observation'])
-                # LOG.info("agent{} obs:{}".format(i,state_dict[i]['legal_action']))
                 action, d_action, sample = agent.process(state_dict[i])
                 if eval:
                     action = d_action
-                # print("input act: [{}], {}, {}".format(i, action, state_dict[i]["legal_action"][:12]))
                 actions.append(action)
                 if action[0] == 10:
                     episode_infos[i]["h_act_num"] += 1
@@ -461,10 +630,6 @@ class Actor:
 
         last_clean = time.time()
 
-        # support multi heroes
-        # camp1_heros = ["luban"]
-        # camp2_heros = ["luban", "houyi", "gongsunli", "direnjie", "makeboluo"]
-
         heros = ["luban", "houyi", "gongsunli", "direnjie", "makeboluo"]
         heros_count1 = [1, 1, 1, 1, 1]
         heros_count2 = [1, 1, 1, 1, 1]
@@ -495,18 +660,11 @@ class Actor:
                 dict(self.ALL_CONFIG_DICT[hero_name1][0]),
                 dict(self.ALL_CONFIG_DICT[hero_name2][1]),
             ]
-
             change_hero_cnt += 1
             camp1_index = (camp1_index + 1) % len(camp1_heros)
             if change_hero_cnt % 5 == 0:
                 change_hero_cnt = 0
                 camp2_index = (camp2_index + 1) % len(camp2_heros)
-
-            # camp1_index += 1
-            # if camp1_index % 5 == 0:
-            #     # change it to select heroes
-            #     camp1_index = 3
-            #     camp2_index = (camp2_index + 1) % 5
 
             print(config_dicts)
             try:
@@ -521,9 +679,15 @@ class Actor:
                             agent_0, agent_1, cur_eval_cnt, eval_number
                         )
 
-                    self._run_episode(
-                        config_dicts, True, load_models=cur_models, eval_info=eval_info
-                    )
+                    if not Config.distillation:
+                        self._run_episode(
+                            config_dicts, True, load_models=cur_models, eval_info=eval_info
+                        )
+                    else:
+                        self._run_episode_distillation(
+                            config_dicts, True, load_models=cur_models, eval_info=eval_info
+                        )
+
                     # swap camp
                     cur_models.reverse()
                     swap = not swap
@@ -532,9 +696,16 @@ class Actor:
                     eval_with_common_ai = (
                         self._episode_num + 0
                     ) % Config.EVAL_FREQ == 0 and self.m_config_id == 0
-                    self._run_episode(
-                        config_dicts, eval_with_common_ai, load_models=load_models
-                    )
+                    if not Config.distillation:
+                        self._run_episode(
+                            config_dicts, eval_with_common_ai, load_models=load_models
+                        )
+                    else:
+                        self._run_episode_distillation(
+                            config_dicts, eval_with_common_ai,
+                            load_models=load_models
+                        )
+
                 if self.env.render is not None:
                     self.env.render.dump_one_round()
                 self._episode_num += 1

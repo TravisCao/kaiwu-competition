@@ -1,3 +1,4 @@
+# ignore all but
 /*
 # /*/
 !code
@@ -8,16 +9,24 @@
 GameAiMgr*
 code/cpu_code/actor/code/algorithms/checkpoint/*
 *.pyc
-code/cpu_code/actor/code/eval_ai
+# cpu_code ignore
 code/cpu_code/script/config.conf
 code/cpu_code/script/cpu.iplist
+code/cpu_code/actor/code/eval_ai
+code/cpu_code/actor/code/teachers
+# gpu_code ignore
 code/gpu_code/learner/checkpoints
 code/gpu_code/learner/model/init
 code/gpu_code/learner/model/train/graph.pbtxt
 code/gpu_code/script/config.conf
 code/gpu_code/learner/tool/config.conf
+
+# tests ignore
 code/tests/remote*
 code/tests/*log
+code/tests/eval_ai
+
+# tests battle
 code/battle/remote*
 *.zip
 *.tgz

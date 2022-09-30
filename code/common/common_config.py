@@ -25,9 +25,14 @@ class ModelConfig:
     first_decay_steps = 20000
     use_lr_decay = True
 
+    distillation = True
+
     NETWORK_NAME = "network"
     LSTM_TIME_STEPS = 16
     LSTM_UNIT_SIZE = 512
+
+    # data shapes divided by LSTM_TIME_STEPS (16)
+    # except for the last two
     DATA_SPLIT_SHAPE = [
         809,
         1,
@@ -55,7 +60,7 @@ class ModelConfig:
         512,
     ]
     SERI_VEC_SPLIT_SHAPE = [(725,), (84,)]
-    INIT_LEARNING_RATE_START = 4e-5
+    INIT_LEARNING_RATE_START = 1e-4
     BETA_START = 0.025
     LOG_EPSILON = 1e-6
     LABEL_SIZE_LIST = [12, 16, 16, 16, 16, 8]
@@ -73,6 +78,7 @@ class ModelConfig:
     RMSPROP_EPSILON = 0.01
     CLIP_PARAM = 0.2
 
+    # smooth term
     MIN_POLICY = 0.00001
     TASK_ID = 15428
     TASK_UUID = "a2dbb49f-8a67-4bd4-9dc5-69e78422e72e"
@@ -88,30 +94,30 @@ class ModelConfig:
         "is_train, lstm_cell, lstm_hidden_state"
     )
     data_shapes = [
-        [12944],
-        [16],
-        [16],
-        [16],
-        [16],
-        [16],
-        [16],
-        [16],
-        [16],
-        [192],
-        [256],
-        [256],
-        [256],
-        [256],
-        [128],
-        [16],
-        [16],
-        [16],
-        [16],
-        [16],
-        [16],
-        [16],
-        [512],
-        [512],
+        [12944], # observation
+        [16],    # reward
+        [16],    # advantage
+        [16],    # label0
+        [16],    # label1
+        [16],    # label2
+        [16],    # label3
+        [16],    # label4
+        [16],    # label5
+        [192],   # prob0
+        [256],   # prob1
+        [256],   # prob2
+        [256],   # prob3
+        [256],   # prob4
+        [128],   # prob5
+        [16],    # weight0
+        [16],    # weight1
+        [16],    # weight2
+        [16],    # weight3
+        [16],    # weight4
+        [16],    # weight5
+        [16],    # is_train
+        [512],   # lstm_cell
+        [512],   # lstm_hidden_state
     ]
     key_types = (
         "tf.float32,tf.float32,tf.float32,"

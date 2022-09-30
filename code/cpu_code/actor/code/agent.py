@@ -18,7 +18,9 @@ import rl_framework.common.logging as LOG
 
 _G_CHECK_POINT_PREFIX = "checkpoints_"
 _G_RAND_MAX = 10000
-_G_MODEL_UPDATE_RATIO = 0.8
+
+# always keep latest model when policy distillation
+_G_MODEL_UPDATE_RATIO = 0.8 if not Config.distillation else 1.0
 
 
 def cvt_infer_list_to_numpy_list(infer_list):
@@ -222,6 +224,7 @@ class Agent:
         prob, value, action, _ = pred_ret
 
         legal_action = self._update_legal_action(state_dict["legal_action"], action)
+
         keys = (
             "frame_no",
             "vec_feature",

@@ -41,6 +41,10 @@ class Config:
     EVAL_FREQ = 5
 
 
+    distillation = ModelConfig.distillation
+    hero_names = ['luban', 'houyi', 'direnjie', 'gongsunli', 'makeboluo']
+    teacher_model_paths = ["teachers/teacher_" + hero for hero in hero_names]
+    teacher_model_paths = dict(zip(hero_names, teacher_model_paths))
     reward_win = 5.0
 
 

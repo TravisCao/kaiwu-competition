@@ -208,7 +208,12 @@ class SampleManager:
 
                 # reward_sum & advantage
                 # LOG.error("reward_sum {}, {}".format(rl_info.reward_sum, type(rl_info.reward_sum)))
-                sample_batch[cnt, idx] = rl_info.reward_sum
+
+                # in distillation, the reward part is teacher model value
+                if not ModelConfig.distillation:
+                    sample_batch[cnt, idx] = rl_info.reward_sum
+                else:
+                    sample_batch[cnt, idx] = rl_info.value
                 idx += 1
                 sample_batch[cnt, idx] = rl_info.advantage
                 idx += 1
