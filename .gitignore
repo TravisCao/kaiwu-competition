@@ -18,6 +18,7 @@ code/gpu_code/script/config.conf
 code/gpu_code/learner/tool/config.conf
 code/tests/remote*
 code/tests/*log
+code/battle/remote*
 *.zip
 *.tgz
 *.tar

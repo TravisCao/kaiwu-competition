@@ -20,6 +20,7 @@ from agent import Agent as Agent
 from algorithms.model.model import Model
 from itertools import chain, repeat
 import random
+
 IS_TRAIN = Config.IS_TRAIN
 FLAGS = flags.FLAGS
 reward_win = Config.reward_win
@@ -36,7 +37,21 @@ class Actor:
         run 1 episode
         save sample in sample manager
     """
-    SKILL_DICT = ["heal", "rage", "frenzy","flash", "sprint", "execute", "disrupt", "daze", "stun", "purity", "weak", "intimidate"]
+
+    SKILL_DICT = [
+        "heal",
+        "rage",
+        "frenzy",
+        "flash",
+        "sprint",
+        "execute",
+        "disrupt",
+        "daze",
+        "stun",
+        "purity",
+        "weak",
+        "intimidate",
+    ]
     ALL_CONFIG_DICT = {
         "luban": [{"hero": "luban", "skill": "frenzy"} for _ in range(2)],
         "miyue": [{"hero": "miyue", "skill": "frenzy"} for _ in range(2)],
@@ -451,10 +466,15 @@ class Actor:
         # camp2_heros = ["luban", "houyi", "gongsunli", "direnjie", "makeboluo"]
 
         heros = ["luban", "houyi", "gongsunli", "direnjie", "makeboluo"]
-        heros_count = [1, 1, 1, 1, 1]
+        heros_count1 = [1, 1, 1, 1, 1]
+        heros_count2 = [1, 1, 1, 1, 1]
 
-        camp1_heros = camp2_heros = list(
-            chain.from_iterable(map(repeat, heros, heros_count))
+        camp1_heros = list(
+            chain.from_iterable(map(repeat, heros, heros_count1))
+        )
+
+        camp2_heros = list(
+            chain.from_iterable(map(repeat, heros, heros_count2))
         )
 
         # change it to select heroes
@@ -465,8 +485,12 @@ class Actor:
         while True:
             hero_name1 = camp1_heros[camp1_index]
             hero_name2 = camp2_heros[camp2_index]
-            self.ALL_CONFIG_DICT[hero_name1][0]['skill'] = self.SKILL_DICT[random.randint(0,11)]
-            self.ALL_CONFIG_DICT[hero_name1][1]['skill'] = self.SKILL_DICT[random.randint(0,11)]
+            self.ALL_CONFIG_DICT[hero_name1][0]["skill"] = self.SKILL_DICT[
+                random.randint(0, 11)
+            ]
+            self.ALL_CONFIG_DICT[hero_name1][1]["skill"] = self.SKILL_DICT[
+                random.randint(0, 11)
+            ]
             config_dicts = [
                 dict(self.ALL_CONFIG_DICT[hero_name1][0]),
                 dict(self.ALL_CONFIG_DICT[hero_name2][1]),
