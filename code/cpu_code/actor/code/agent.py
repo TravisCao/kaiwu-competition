@@ -25,6 +25,7 @@ def cvt_infer_list_to_numpy_list(infer_list):
     data_list = [infer.data for infer in infer_list]
     return data_list
 
+
 class RandomAgent:
     def process(self, feature, legal_action):
         action = [random.randint(0, 2) - 1, random.randint(0, 2) - 1]
@@ -32,14 +33,15 @@ class RandomAgent:
         neg_log_pi = [0]
         return action, value, neg_log_pi
 
+
 class Agent:
     def __init__(
-            self,
-            model_cls,
-            model_pool_addr,
-            keep_latest=False,
-            local_mode=False,
-            dataset=None,
+        self,
+        model_cls,
+        model_pool_addr,
+        keep_latest=False,
+        local_mode=False,
+        dataset=None,
     ):
         self.model = model_cls()
         self.graph = self.model.build_infer_graph()
@@ -197,7 +199,7 @@ class Agent:
         top_size = ModelConfig.LABEL_SIZE_LIST[0]
         original_la = np.array(original_la)
         fix_part = original_la[: -target_size * top_size]
-        target_la = original_la[-target_size * top_size:]
+        target_la = original_la[-target_size * top_size :]
         target_la = target_la.reshape([top_size, target_size])[actions[0]]
         return np.concatenate([fix_part, target_la], axis=0)
 

@@ -33,7 +33,6 @@ class Algorithm:
         self.first_decay_steps = Config.first_decay_steps
         self.use_lr_decay = Config.use_lr_decay
 
-
     def get_input_tensors(self):
         return [
             self.feature_ph,
@@ -113,11 +112,11 @@ class Algorithm:
         return self.graph
 
     def build_graph(self, datas, update):
-        
+
         # update is the global_step passed from graph variable in Benchmark Class
         # build_graph function is invoked by the _add_forward_pass_and_gradients
         # function in the graph variable
-        
+
         # we can set the global step here for optimizer
         self.set_global_step(update)
 
@@ -208,13 +207,15 @@ class Algorithm:
         }
 
         return loss, info_list
-    
+
     def set_global_step(self, global_step):
         self.global_step = global_step
 
     def get_optimizer(self):
         if self.use_lr_decay:
-            lr_decayed = tf.train.cosine_decay_restarts(self.learning_rate, self.global_step, self.first_decay_steps)
+            lr_decayed = tf.train.cosine_decay_restarts(
+                self.learning_rate, self.global_step, self.first_decay_steps
+            )
             return tf.train.AdamOptimizer(learning_rate=lr_decayed, epsilon=0.00001)
         return tf.train.AdamOptimizer(learning_rate=self.learning_rate, epsilon=0.00001)
         # return tf.train.AdamOptimizer(learning_rate=MyLRSchedule(self.learning_rate), epsilon=0.00001)
