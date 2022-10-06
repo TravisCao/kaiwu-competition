@@ -376,7 +376,7 @@ class Algorithm:
                     axis=1,
                 )
 
-                temp_policy_loss = -tf.reduce_sum(
+                temp_policy_loss = tf.reduce_sum(
                     (temp_policy_loss * tf.to_float(weight_list[task_index]))
                 ) / tf.maximum(
                     tf.reduce_sum(tf.to_float(weight_list[task_index])), 1.0
