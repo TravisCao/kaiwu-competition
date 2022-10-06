@@ -21,7 +21,7 @@ class DimConfig:
 
 
 class ModelConfig:
-
+    
     first_decay_steps = 20000
     use_lr_decay = True
 
@@ -37,6 +37,10 @@ class ModelConfig:
     # except for the last two
     DATA_SPLIT_SHAPE = [
         809,
+        1,
+        1,
+        1,
+        1,
         1,
         1,
         1,
@@ -89,7 +93,8 @@ class ModelConfig:
     TARGET_EMBED_DIM = 32
 
     data_keys = (
-        "observation,reward,advantage,"
+        "observation,reward_farming,reward_KDA,reward_damage,reward_pushing,reward_win_lose,"
+        "advantage,"
         "label0,label1,label2,label3,label4,label5,"
         "prob0,prob1,prob2,prob3,prob4,prob5,"
         "weight0,weight1,weight2,weight3,weight4,weight5,"
@@ -97,7 +102,11 @@ class ModelConfig:
     )
     data_shapes = [
         [12944], # observation
-        [16],    # reward
+        [16],    # reward_farming
+        [16],    # reward_KDA
+        [16],    # reward_damage
+        [16],    # reward_pushing
+        [16],    # reward_win_lose
         [16],    # advantage
         [16],    # label0
         [16],    # label1
@@ -122,7 +131,7 @@ class ModelConfig:
         [LSTM_UNIT_SIZE],   # lstm_hidden_state
     ]
     key_types = (
-        "tf.float32,tf.float32,tf.float32,"
+        "tf.float32,tf.float32,tf.float32,tf.float32,tf.float32,tf.float32,tf.float32,"
         "tf.int32,tf.int32,tf.int32,tf.int32,tf.int32,tf.int32,"
         "tf.float32,tf.float32,tf.float32,tf.float32,tf.float32,tf.float32,"
         "tf.float32,tf.float32,tf.float32,tf.float32,tf.float32,"

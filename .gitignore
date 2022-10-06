@@ -32,3 +32,6 @@ code/battle/remote*
 *.tgz
 *.tar
 *.done
+code/cpu_code/script/config.conf
+code/gpu_code/learner/tool/config.conf
+code/gpu_code/script/config.conf

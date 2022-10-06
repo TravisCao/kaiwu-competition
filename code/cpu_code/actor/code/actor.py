@@ -6,7 +6,7 @@ import os
 import traceback
 import time
 import logging
-
+import json
 from collections import deque
 import numpy as np
 from config.config import Config
@@ -24,11 +24,20 @@ import random
 IS_TRAIN = Config.IS_TRAIN
 FLAGS = flags.FLAGS
 reward_win = Config.reward_win
+
 eval_ai_bool = Config.eval_ai
+
+reward_json = open(
+    "config.json",
+)
+reward_weight = json.load(reward_json)
+reward_json.close()
+
 LOG = CommonLogger.get_logger()
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 OS_ENV = os.environ
 IS_DEV = OS_ENV.get("IS_DEV")
+eval_ai_bool = Config.eval_ai
 
 
 class Actor:
@@ -181,6 +190,29 @@ class Actor:
                     if state_dict[i]["reward"] is not None:
                         if type(state_dict[i]["reward"]) == tuple:
                             # means the game not end but close game is sent
+                            reward = state_dict[i]["reward"]
+                            # Farming related: gold, experience, mana, (attack monster, no-op (not acting))
+                            reward_farming = (
+                                reward[-3] * float(reward_weight["reward_money"])
+                                + reward[2] * float(reward_weight["reward_exp"])
+                                + reward[1] * float(reward_weight["reward_ep_rate"])
+                            )
+                            # KDA related: kill, death, assist, tyrant buff, overlord buff, expose invisible enemy, last hit
+                            reward_KDA = (
+                                reward[4] * float(reward_weight["reward_kill"])
+                                + reward[0] * float(reward_weight["reward_dead"])
+                                + reward[5] * float(reward_weight["reward_last_hit"])
+                            )
+                            # Damage related: health point, hurt to hero
+                            reward_damage = reward[3] * float(
+                                reward_weight["reward_hp_point"]
+                            )
+                            # Pushing related: attack turrets, attack enemy home base
+                            reward_pushing = reward[-2] * float(
+                                reward_weight["reward_tower_hp_point"]
+                            )
+                            # Win/lose related: destroy enemy home base
+                            reward_win_lose = 0
                             if self.loss_camp == -1:
                                 win = 0
                             else:
@@ -194,18 +226,36 @@ class Actor:
                             )
                             # if reward is a vec
                             sample_manager.save_last_sample(
-                                agent_id=i, reward=state_dict[i]["reward"][-1] + win
+                                agent_id=i,
+                                reward_farming=reward_farming,
+                                reward_KDA=reward_KDA,
+                                reward_damage=reward_damage,
+                                reward_pushing=reward_pushing,
+                                reward_win_lose=win,
                             )
                         else:
                             # if reward is a float number
                             sample_manager.save_last_sample(
-                                agent_id=i, reward=state_dict[i]["reward"]
+                                agent_id=i,
+                                reward_farming=state_dict[i]["reward"],
+                                reward_KDA=state_dict[i]["reward"],
+                                reward_damage=state_dict[i]["reward"],
+                                reward_pushing=state_dict[i]["reward"],
+                                reward_win_lose=state_dict[i]["reward"],
                             )
                     else:
-                        sample_manager.save_last_sample(agent_id=i, reward=0)
-    
+                        sample_manager.save_last_sample(
+                            agent_id=i,
+                            reward_farming=0,
+                            reward_KDA=0,
+                            reward_damage=0,
+                            reward_pushing=0,
+                            reward_win_lose=0,
+                        )
 
-    def _run_episode_distillation(self, env_config, eval=False, load_models=None, eval_info=""):
+    def _run_episode_distillation(
+        self, env_config, eval=False, load_models=None, eval_info=""
+    ):
         for item in g_log_time.items():
             g_log_time[item[0]] = []
         sample_manager = self.m_sample_manager
@@ -217,8 +267,7 @@ class Actor:
         LOG.info(env_config)
         use_common_ai = self._get_common_ai(eval, load_models)
         use_eval_ai = [False] * len(self.agents)
-        if not eval_ai_bool:
-            use_eval_ai = use_common_ai
+
         hero_name1 = env_config[0]["hero"]
         hero_name2 = env_config[1]["hero"]
         teacher_agents = [
@@ -243,7 +292,7 @@ class Actor:
             camp = self.env.player_camp.get(player_id)
             self.agents[i].set_game_info(camp, player_id)
             teacher_agents[i].set_game_info(camp, player_id)
- 
+
         # reset mem pool and models
         LOG.debug("reset sample_manager")
 
@@ -256,16 +305,18 @@ class Actor:
 
         while not done:
             log_time_func("one_frame")
-            actions = [] # action of student model
-            actions_t = [] # action of teacher model
+            actions = []  # action of student model
+            actions_t = []  # action of teacher model
             log_time_func("agent_process")
             for i, agent in enumerate(self.agents):
-                if use_eval_ai[i]: # it is the reverse meaning
+                if use_eval_ai[i]:  # it is the reverse meaning
                     actions.append(None)
                     rewards[i].append(0.0)
                     continue
                 # student models explores the env
-                action_t, d_action_t, sample_t = teacher_agents[i].process(state_dict[i])
+                action_t, d_action_t, sample_t = teacher_agents[i].process(
+                    state_dict[i]
+                )
                 action, d_action, sample = agent.process(state_dict[i])
                 if eval:
                     action = d_action
@@ -341,7 +392,6 @@ class Actor:
         for i, agent in enumerate(self.agents):
             if use_common_ai[i]:
                 continue
-            print("check")
             for hero_state in req_pbs[i].hero_list:
                 if agent.player_id == hero_state.runtime_id:
                     episode_infos[i]["money_per_frame"] = (
@@ -403,26 +453,35 @@ class Actor:
         # reload agent models
         self._reload_agents(eval, load_models)
         render = self.render if eval else None
+
         # restart a new game
         # reward :[dead,ep_rate,exp,hp_point,kill,last_hit,money,tower_hp_point,reward_sum]
         _, r, d, state_dict = self.env.reset(
             env_config, use_common_ai=use_eval_ai, eval=eval, render=render
         )
+
         if state_dict[0] is None:
             game_id = state_dict[1]["game_id"]
         else:
             game_id = state_dict[0]["game_id"]
 
         # update agents' game information
-        for i, agent in enumerate(self.agents):
+        for i in range(len(self.agents)):
             player_id = self.env.player_list[i]
             camp = self.env.player_camp.get(player_id)
-            agent.set_game_info(camp, player_id)
+            self.agents[i].set_game_info(camp, player_id)
 
         # reset mem pool and models
         LOG.debug("reset sample_manager")
+
         sample_manager.reset(agents=self.agents, game_id=game_id)
         rewards = [[], []]
+        values_farming = [[], []]
+        values_KDA = [[], []]
+        values_damage = [[], []]
+        values_pushing = [[], []]
+        values_win_lose = [[], []]
+
         step = 0
         log_time_func("reset", end=True)
         game_info = {}
@@ -430,8 +489,8 @@ class Actor:
 
         while not done:
             log_time_func("one_frame")
-            # while True:
-            actions = []
+            actions = []  # action of student model
+            actions_t = []  # action of teacher model
             log_time_func("agent_process")
             for i, agent in enumerate(self.agents):
                 # it is the reverse meaning
@@ -447,20 +506,32 @@ class Actor:
                     episode_infos[i]["h_act_num"] += 1
 
                 # only the last reward is stored
-                rewards[i].append(sample["reward"])
+                rewards[i].append(
+                    sample["reward_farming"]
+                    + sample["reward_KDA"]
+                    + sample["reward_damage"]
+                    + sample["reward_pushing"]
+                    + sample["reward_win_lose"]
+                )
+                values_farming[i].append(sample["value_farming"])
+                values_KDA[i].append(sample["value_KDA"])
+                values_damage[i].append(sample["value_damage"])
+                values_pushing[i].append(sample["value_pushing"])
+                values_win_lose[i].append(sample["value_win_lose"])
 
                 if agent.is_latest_model and not eval:
+                    # save teachers sample for updating student
                     sample_manager.save_sample(
                         **sample, agent_id=i, game_id=game_id, uuid=self.m_task_uuid
                     )
             log_time_func("agent_process", end=True)
 
             log_time_func("step")
+
             # reward :[dead,ep_rate,exp,hp_point,kill,last_hit,money,tower_hp_point,reward_sum]
+            # studend-driven: let student model to explore the environment
             _, r, d, state_dict = self.env.step(actions)
 
-            # if np.isnan(r[0][-1]) or np.isnan(r[1][-1]):
-            #     exit(0)
             log_time_func("step", end=True)
 
             req_pbs = self.env.cur_req_pb
@@ -507,8 +578,6 @@ class Actor:
                     )
                 )
 
-        # r_array_sum = np.array(rewards).sum(axis=1)
-
         for i, agent in enumerate(self.agents):
             if use_common_ai[i]:
                 continue
@@ -537,9 +606,12 @@ class Actor:
                 episode_infos[i]["win"] = -1 if agent.hero_camp == loss_camp else 1
 
             episode_infos[i]["reward"] = np.sum(rewards[i])
+            episode_infos[i]["values_farming"] = np.sum(values_farming[i])
+            episode_infos[i]["values_KDA"] = np.sum(values_KDA[i])
+            episode_infos[i]["values_damage"] = np.sum(values_damage[i])
+            episode_infos[i]["values_pushing"] = np.sum(values_pushing[i])
+            episode_infos[i]["values_win_lose"] = np.sum(values_win_lose[i])
             episode_infos[i]["h_act_rate"] = episode_infos[i]["h_act_num"] / step
-            # LOG.info(
-            #     f"Agent:{i}: [dead, ep_rate, exp, hp_point, kill, last_hit, money, tower_hp_point, reward_sum]:{list(r_array_sum[0])}")
 
         if IS_TRAIN and not eval:
             LOG.debug("send sample_manager")
@@ -575,7 +647,6 @@ class Actor:
         LOG.info("=" * 50)
         for i, agent in enumerate(self.agents):
             if common_ai[i]:
-                LOG.info("Agent is eval_ai, skip!")
                 continue
             LOG.info(
                 "Agent is_main:{}, type:{}, camp:{},reward:{:.3f}, win:{}, win_{}:{},h_act_rate:{}".format(
@@ -587,6 +658,16 @@ class Actor:
                     episode_infos[i]["hero_id"],
                     episode_infos[i]["win"],
                     1.0,
+                )
+            )
+            LOG.info(
+                "Agent is_main:{}, farming value:{:.3f}, KDA value:{:.3f}, damage value:{:.3f}. pushing value:{:.3f}. win lose value:{:.3f}".format(
+                    agent.keep_latest and eval,
+                    episode_infos[i]["values_farming"],
+                    episode_infos[i]["values_KDA"],
+                    episode_infos[i]["values_damage"],
+                    episode_infos[i]["values_pushing"],
+                    episode_infos[i]["values_win_lose"],
                 )
             )
             LOG.info(
@@ -653,13 +734,9 @@ class Actor:
         heros_count1 = [1, 1, 1, 1, 0]
         heros_count2 = [1, 1, 1, 1, 0]
 
-        camp1_heros = list(
-            chain.from_iterable(map(repeat, heros, heros_count1))
-        )
+        camp1_heros = list(chain.from_iterable(map(repeat, heros, heros_count1)))
 
-        camp2_heros = list(
-            chain.from_iterable(map(repeat, heros, heros_count2))
-        )
+        camp2_heros = list(chain.from_iterable(map(repeat, heros, heros_count2)))
 
         # change it to select heroes
         camp1_index = 0
@@ -700,11 +777,17 @@ class Actor:
 
                     if not Config.distillation:
                         self._run_episode(
-                            config_dicts, True, load_models=cur_models, eval_info=eval_info
+                            config_dicts,
+                            True,
+                            load_models=cur_models,
+                            eval_info=eval_info,
                         )
                     else:
                         self._run_episode_distillation(
-                            config_dicts, True, load_models=cur_models, eval_info=eval_info
+                            config_dicts,
+                            True,
+                            load_models=cur_models,
+                            eval_info=eval_info,
                         )
 
                     # swap camp
@@ -721,8 +804,7 @@ class Actor:
                         )
                     else:
                         self._run_episode_distillation(
-                            config_dicts, eval_with_common_ai,
-                            load_models=load_models
+                            config_dicts, eval_with_common_ai, load_models=load_models
                         )
 
                 if self.env.render is not None:

@@ -1,4 +1,5 @@
 import random
+from xml.parsers.expat import model
 import h5py
 import numpy as np
 
@@ -15,14 +16,17 @@ from rl_framework.model_pool import ModelPoolAPIs
 from framework.common.common_func import log_time
 from config.config import ModelConfig, Config
 import rl_framework.common.logging as LOG
+import json
 
 _G_CHECK_POINT_PREFIX = "checkpoints_"
 _G_RAND_MAX = 10000
 
 # always keep latest model when policy distillation
 _G_MODEL_UPDATE_RATIO = 0.8 if not Config.distillation else 1.0
-
-
+reward_json = open('config.json',)
+reward_weight = json.load(reward_json)
+reward_win = Config.reward_win
+reward_json.close()
 def cvt_infer_list_to_numpy_list(infer_list):
     data_list = [infer.data for infer in infer_list]
     return data_list
@@ -70,7 +74,7 @@ class Agent:
         self.last_model_path = None
         self.label_size_list = ModelConfig.LABEL_SIZE_LIST
         self.legal_action_size = ModelConfig.LEGAL_ACTION_SIZE_LIST
-
+        self.reward_we = reward_weight
         # self.agent_type = "network"
         if self.keep_latest:
             self.agent_type = "network"
@@ -108,10 +112,12 @@ class Agent:
             self._predictor._sess.run(self.model.init)
         else:
             if model_path is None:
+
                 while True:
                     try:
                         if self.keep_latest:
                             self._get_latest_model()
+     
                         else:
                             self._get_random_model()
                         self.last_model_path = None
@@ -145,13 +151,14 @@ class Agent:
                 LOG.warning("No model in model_pool, wait for 1 sec...")
                 time.sleep(1)
         self.model_list = model_key_list
+        
 
     def _load_model(self, model_version):
         if model_version == self.model_version:
+            LOG.info("latest model")
             return True
         model_path = self._model_pool_api.pull_model_path(model_version)
         model_path = "%s/checkpoint" % (model_path)
-        LOG.info("load model: {} in {}".format(model_version, model_path))
         ret = self._predictor.load_model(model_path)
         if ret:
             # if failed, do not update model_version
@@ -191,7 +198,7 @@ class Agent:
             state_dict["legal_action"],
         )
         pred_ret = self._predict_process(feature_vec, legal_action)
-        _, _, action, d_action = pred_ret
+        _, _, _, _, _, _, action, d_action = pred_ret
         if battle:
             return d_action
         return action, d_action, self._sample_process(state_dict, pred_ret)
@@ -206,6 +213,7 @@ class Agent:
         return np.concatenate([fix_part, target_la], axis=0)
 
     # build samples from state infos
+    #Todo
     def _sample_process(self, state_dict, pred_ret):
         # get is_train
         is_train = False
@@ -220,17 +228,37 @@ class Agent:
             state_dict["reward"],
             state_dict["sub_action_mask"],
         )
+        
         done = False
-        prob, value, action, _ = pred_ret
+        prob, value_farming, value_KDA, value_damage, value_pushing, value_win_lose, action, _ = pred_ret
 
+        # Farming related: gold, experience, mana, (attack monster, no-op (not acting))
+        reward_farming = reward[-3]*float(self.reward_we['reward_money']) + reward[2]*float(self.reward_we['reward_exp']) + reward[1]*float(self.reward_we['reward_ep_rate'])
+        # KDA related: kill, death, assist, tyrant buff, overlord buff, expose invisible enemy, last hit
+        reward_KDA = reward[4]*float(self.reward_we['reward_kill']) + reward[0]*float(self.reward_we['reward_dead']) + reward[5]*float(self.reward_we['reward_last_hit'])
+        # Damage related: health point, hurt to hero
+        reward_damage = reward[3]*float(self.reward_we['reward_hp_point'])
+        # Pushing related: attack turrets, attack enemy home base
+        reward_pushing = reward[-2]*float(self.reward_we['reward_tower_hp_point'])
+        #Win/lose related: destroy enemy home base
+        reward_win_lose = 0 * reward_win
         legal_action = self._update_legal_action(state_dict["legal_action"], action)
         keys = (
             "frame_no",
             "vec_feature",
             "legal_action",
             "action",
-            "reward",
-            "value",
+            #five reward
+            "reward_farming",
+            "reward_KDA",
+            "reward_damage",
+            "reward_pushing",
+            "reward_win_lose",
+            "value_farming",
+            "value_KDA",
+            "value_damage",
+            "value_pushing",
+            "value_win_lose",
             "prob",
             "sub_action",
             "lstm_cell",
@@ -243,8 +271,16 @@ class Agent:
             feature_vec,
             legal_action,
             action,
-            reward[-1],
-            value,
+            reward_farming,
+            reward_KDA,
+            reward_damage,
+            reward_pushing,
+            reward_win_lose,
+            value_farming, 
+            value_KDA, 
+            value_damage, 
+            value_pushing, 
+            value_win_lose,
             prob,
             sub_action_mask,
             self.lstm_cell,
@@ -270,7 +306,7 @@ class Agent:
         return keys
 
     def _sample_process_for_saver(self, sample_dict):
-        keys = ("frame_no", "vec_feature", "legal_action", "action", "reward", "done")
+        keys = ("frame_no", "vec_feature", "legal_action", "action", "reward_farming", "reward_KDA", "reward_damage", "reward_pushing", "reward_win_lose", "done")
         keys_in_h5 = self._get_h5file_keys(self.dataset)
         if len(keys_in_h5) == 0:
             self.dataset.create_dataset(
@@ -302,8 +338,36 @@ class Agent:
                 chunks=True,
             )
             self.dataset.create_dataset(
-                "reward",
-                data=[[sample_dict["reward"]]],
+                "reward_farming",
+                data=[[sample_dict["reward_farming"]]],
+                compression="gzip",
+                maxshape=(None, 1),
+                chunks=True,
+            )
+            self.dataset.create_dataset(
+                "reward_KDA",
+                data=[[sample_dict["reward_KDA"]]],
+                compression="gzip",
+                maxshape=(None, 1),
+                chunks=True,
+            )
+            self.dataset.create_dataset(
+                "reward_damage",
+                data=[[sample_dict["reward_damage"]]],
+                compression="gzip",
+                maxshape=(None, 1),
+                chunks=True,
+            )
+            self.dataset.create_dataset(
+                "reward_pushing",
+                data=[[sample_dict["reward_pushing"]]],
+                compression="gzip",
+                maxshape=(None, 1),
+                chunks=True,
+            )
+            self.dataset.create_dataset(
+                "reward_win_lose",
+                data=[[sample_dict["reward_win_lose"]]],
                 compression="gzip",
                 maxshape=(None, 1),
                 chunks=True,
@@ -347,11 +411,11 @@ class Agent:
         # cvt output dataxz
         np_output = cvt_infer_list_to_numpy_list(output_list)
 
-        logits, value, self.lstm_cell, self.lstm_hidden = np_output[:4]
+        logits, value_farming, value_KDA, value_damage, value_pushing, value_win_lose, self.lstm_cell, self.lstm_hidden = np_output[:8]
 
         prob, action, d_action = self._sample_masked_action(logits, legal_action)
 
-        return prob, value, action, d_action  # prob: [[ ]], others: all 1D
+        return prob, value_farming, value_KDA, value_damage, value_pushing, value_win_lose, action, d_action  # prob: [[ ]], others: all 1D
 
     # get final executable actions
     def _sample_masked_action(self, logits, legal_action):

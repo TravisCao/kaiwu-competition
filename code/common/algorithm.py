@@ -45,8 +45,9 @@ class Algorithm:
         ]
 
     def get_output_tensors(self):
-        return [self.logits, self.value, self.lstm_cell_output, self.lstm_hidden_output]
+        return [self.logits, self.value_farming, self.value_KDA, self.value_damage, self.value_pushing, self.value_win_lose, self.lstm_cell_output, self.lstm_hidden_output]
         # + [self.used_legal_action]
+
 
     def build_infer_graph(self):
         if self.graph is not None:
@@ -102,12 +103,18 @@ class Algorithm:
             fc_label_result_list = self._inference(
                 seri_vec, init_lstm_cell, init_lstm_hidden, only_inference=True
             )
+            #ToDo
             logits_list, value_list = (
-                fc_label_result_list[:-1],
-                fc_label_result_list[-1],
+                fc_label_result_list[:-5],
+                fc_label_result_list[-5:],
             )
+           
             self.logits = tf.layers.flatten(tf.concat(logits_list, axis=1))
-            self.value = tf.layers.flatten(value_list[0])
+            self.value_farming = tf.layers.flatten(value_list[0])
+            self.value_KDA = tf.layers.flatten(value_list[1])
+            self.value_damage = tf.layers.flatten(value_list[2])
+            self.value_pushing = tf.layers.flatten(value_list[3])
+            self.value_win_lose = tf.layers.flatten(value_list[4])
             # self.init_saver = tf.train.Saver(tf.global_variables())
             self.init = tf.global_variables_initializer()
             # self.sess = tf.Session(config=config)
@@ -137,19 +144,33 @@ class Algorithm:
         # (batch_size * (feature_size * LSTM_STEPS))
         seri_vec = tf.reshape(seri_vec, [-1, self.data_split_shape[0]])
 
-        reward = data_list[1]
-        reward = tf.reshape(reward, [-1, self.data_split_shape[1]])
+        reward_farming = data_list[1]
+        reward_farming = tf.reshape(reward_farming, [-1, self.data_split_shape[1]])
 
-        advantage = data_list[2]
-        advantage = tf.reshape(advantage, [-1, self.data_split_shape[2]])
+        reward_KDA = data_list[2]
+        reward_KDA = tf.reshape(reward_KDA, [-1, self.data_split_shape[2]])
+        
+        reward_damage = data_list[3]
+        reward_damage = tf.reshape(reward_damage, [-1, self.data_split_shape[3]])
+        
+        reward_pushing = data_list[4]
+        reward_pushing = tf.reshape(reward_pushing, [-1, self.data_split_shape[4]])
+        
+        reward_win_lose = data_list[5]
+        reward_win_lose = tf.reshape(reward_win_lose, [-1, self.data_split_shape[5]])
 
-        label_list = data_list[3 : 3 + len(self.label_size_list)]
+        reward = reward_damage + reward_farming + reward_KDA + reward_pushing + reward_win_lose
+        
+        advantage = data_list[6]
+        advantage = tf.reshape(advantage, [-1, self.data_split_shape[6]])
+
+        label_list = data_list[7 : 7 + len(self.label_size_list)]
         for shape_index in range(len(self.label_size_list)):
             # label_list[shape_index] = tf.cast(label_list,dtype=tf.int32)
             label_list[shape_index] = tf.cast(
                 tf.reshape(
                     label_list[shape_index],
-                    [-1, self.data_split_shape[3 + shape_index]],
+                    [-1, self.data_split_shape[7 + shape_index]],
                 ),
                 dtype=tf.int32,
             )
@@ -159,19 +180,19 @@ class Algorithm:
             squeeze_label_list.append(tf.squeeze(ele, axis=[1]))
 
         old_label_probability_list = data_list[
-            3 + len(self.label_size_list) : 3 + 2 * len(self.label_size_list)
+            7 + len(self.label_size_list) : 7 + 2 * len(self.label_size_list)
         ]
         for shape_index in range(len(self.label_size_list)):
             old_label_probability_list[shape_index] = tf.reshape(
                 old_label_probability_list[shape_index],
                 [
                     -1,
-                    self.data_split_shape[3 + len(self.label_size_list) + shape_index],
+                    self.data_split_shape[7 + len(self.label_size_list) + shape_index],
                 ],
             )
 
         weight_list = data_list[
-            3 + 2 * len(self.label_size_list) : 3 + 3 * len(self.label_size_list)
+            7 + 2 * len(self.label_size_list) : 7 + 3 * len(self.label_size_list)
         ]
         for shape_index in range(len(self.label_size_list)):
             weight_list[shape_index] = tf.reshape(
@@ -179,7 +200,7 @@ class Algorithm:
                 [
                     -1,
                     self.data_split_shape[
-                        3 + 2 * len(self.label_size_list) + shape_index
+                        7 + 2 * len(self.label_size_list) + shape_index
                     ],
                 ],
             )
@@ -200,9 +221,17 @@ class Algorithm:
             loss = self._calculate_loss(
                 label_list,
                 old_label_probability_list,
-                fc_label_result_list[:-1],
-                reward,
+                fc_label_result_list[:-5],
+                reward_farming,
+                reward_KDA,
+                reward_damage,
+                reward_pushing,
+                reward_win_lose,
                 advantage,
+                fc_label_result_list[-5],
+                fc_label_result_list[-4],
+                fc_label_result_list[-3],
+                fc_label_result_list[-2],
                 fc_label_result_list[-1],
                 seri_vec,
                 is_train,
@@ -218,9 +247,17 @@ class Algorithm:
             loss = self._calculate_loss_distillation(
                 label_list,
                 old_label_probability_list,
-                fc_label_result_list[:-1],
-                reward,
+                fc_label_result_list[:-5],
+                reward_farming,
+                reward_KDA,
+                reward_damage,
+                reward_pushing,
+                reward_win_lose,
                 advantage,
+                fc_label_result_list[-5],
+                fc_label_result_list[-4],
+                fc_label_result_list[-3],
+                fc_label_result_list[-2],
                 fc_label_result_list[-1],
                 seri_vec,
                 is_train,
@@ -246,17 +283,24 @@ class Algorithm:
             )
             return tf.train.AdamOptimizer(learning_rate=lr_decayed, epsilon=0.00001)
         return tf.train.AdamOptimizer(learning_rate=self.learning_rate, epsilon=0.00001)
-        # return tf.train.AdamOptimizer(learning_rate=MyLRSchedule(self.learning_rate), epsilon=0.00001)
 
     def _squeeze_tensor(
         self,
-        unsqueeze_reward,
+        unsqueeze_reward_farming,
+        unsqueeze_reward_KDA,
+        unsqueeze_reward_damage,
+        unsqueeze_reward_pushing,
+        unsqueeze_reward_win_lose,
         unsqueeze_advantage,
         unsqueeze_label_list,
         unsqueeze_frame_is_train,
         unsqueeze_weight_list,
     ):
-        reward = tf.squeeze(unsqueeze_reward, axis=[1])
+        reward_farming = tf.squeeze(unsqueeze_reward_farming, axis=[1])
+        reward_KDA = tf.squeeze(unsqueeze_reward_KDA, axis=[1])
+        reward_damage = tf.squeeze(unsqueeze_reward_damage, axis=[1])
+        reward_pushing = tf.squeeze(unsqueeze_reward_pushing, axis=[1])
+        reward_win_lose = tf.squeeze(unsqueeze_reward_win_lose, axis=[1])
         advantage = tf.squeeze(unsqueeze_advantage, axis=[1])
         label_list = []
         for ele in unsqueeze_label_list:
@@ -265,16 +309,39 @@ class Algorithm:
         for weight in unsqueeze_weight_list:
             weight_list.append(tf.squeeze(weight, axis=[1]))
         frame_is_train = tf.squeeze(unsqueeze_frame_is_train, axis=[1])
-        return reward, advantage, label_list, frame_is_train, weight_list
+        # return reward, advantage, label_list, frame_is_train, weight_list
+        return reward_farming, reward_KDA, reward_damage, reward_pushing, reward_win_lose, advantage, label_list, frame_is_train, weight_list
 
+    # def _calculate_loss_distillation(
+    #     self,
+    #     unsqueeze_teacher_label_list,
+    #     teacher_label_prob_list,
+    #     student_label_list,
+    #     unsqueeze_teacher_value,
+    #     unsqueeze_advantage,
+    #     student_value_result,
+    #     seri_vec,
+    #     unsqueeze_is_train,
+    #     unsqueeze_weight_list,
+    # ):
+
+    # TODO: not compatible with multi-head value; bug
     def _calculate_loss_distillation(
         self,
-        unsqueeze_teacher_label_list,
-        teacher_label_prob_list,
-        student_label_list,
-        unsqueeze_teacher_value,
+        unsqueeze_label_list,
+        old_label_probability_list,
+        fc2_label_list,
+        unsqueeze_reward_farming,
+        unsqueeze_reward_KDA,
+        unsqueeze_reward_damage,
+        unsqueeze_reward_pushing,
+        unsqueeze_reward_win_lose,
         unsqueeze_advantage,
-        student_value_result,
+        fc2_value_result_farming,
+        fc2_value_result_KDA,
+        fc2_value_result_damage,
+        fc2_value_result_pushing,
+        fc2_value_result_win_lose,
         seri_vec,
         unsqueeze_is_train,
         unsqueeze_weight_list,
@@ -282,16 +349,27 @@ class Algorithm:
         # in policy distillation:
         # the reward position is replaced by teacher model value
         # in the sample manager
-        (
-            teacher_value,
-            advantage,
-            teacher_label_list,
-            _,
-            weight_list,
-        ) = self._squeeze_tensor(
-            unsqueeze_teacher_value,
+        # (
+        #     teacher_value,
+        #     advantage,
+        #     teacher_label_list,
+        #     _,
+        #     weight_list,
+        # ) = self._squeeze_tensor(
+        #     unsqueeze_teacher_value,
+        #     unsqueeze_advantage,
+        #     unsqueeze_teacher_label_list,
+        #     unsqueeze_is_train,
+        #     unsqueeze_weight_list,
+        # )
+        reward_farming, reward_KDA, reward_damage, reward_pushing, reward_win_lose, advantage, label_list, _, weight_list = self._squeeze_tensor(
+            unsqueeze_reward_farming,
+            unsqueeze_reward_KDA,
+            unsqueeze_reward_damage,
+            unsqueeze_reward_pushing,
+            unsqueeze_reward_win_lose,
             unsqueeze_advantage,
-            unsqueeze_teacher_label_list,
+            unsqueeze_label_list,
             unsqueeze_is_train,
             unsqueeze_weight_list,
         )
@@ -378,7 +456,7 @@ class Algorithm:
                     axis=1,
                 )
 
-                temp_policy_loss = tf.reduce_sum(
+                temp_policy_loss = -tf.reduce_sum(
                     (temp_policy_loss * tf.to_float(weight_list[task_index]))
                 ) / tf.maximum(
                     tf.reduce_sum(tf.to_float(weight_list[task_index])), 1.0
@@ -407,16 +485,28 @@ class Algorithm:
         unsqueeze_label_list,
         old_label_probability_list,
         fc2_label_list,
-        unsqueeze_reward,
+        unsqueeze_reward_farming,
+        unsqueeze_reward_KDA,
+        unsqueeze_reward_damage,
+        unsqueeze_reward_pushing,
+        unsqueeze_reward_win_lose,
         unsqueeze_advantage,
-        fc2_value_result,
+        fc2_value_result_farming,
+        fc2_value_result_KDA,
+        fc2_value_result_damage,
+        fc2_value_result_pushing,
+        fc2_value_result_win_lose,
         seri_vec,
         unsqueeze_is_train,
         unsqueeze_weight_list,
     ):
 
-        reward, advantage, label_list, _, weight_list = self._squeeze_tensor(
-            unsqueeze_reward,
+        reward_farming, reward_KDA, reward_damage, reward_pushing, reward_win_lose, advantage, label_list, _, weight_list = self._squeeze_tensor(
+            unsqueeze_reward_farming,
+            unsqueeze_reward_KDA,
+            unsqueeze_reward_damage,
+            unsqueeze_reward_pushing,
+            unsqueeze_reward_win_lose,
             unsqueeze_advantage,
             unsqueeze_label_list,
             unsqueeze_is_train,
@@ -442,13 +532,30 @@ class Algorithm:
         )
 
         # loss of value net
-        fc2_value_result_squeezed = tf.squeeze(fc2_value_result, axis=[1])
-        self.value_cost = 0.5 * tf.reduce_mean(
-            tf.square(reward - fc2_value_result_squeezed), axis=0
+        fc2_value_result_squeezed_farming = tf.squeeze(fc2_value_result_farming, axis=[1])
+        self.value_cost_farming = 0.5 * tf.reduce_mean(
+            tf.square(reward_farming - fc2_value_result_squeezed_farming), axis=0
         )
-        new_advantage = reward - fc2_value_result_squeezed
-        self.value_cost = 0.5 * tf.reduce_mean(tf.square(new_advantage), axis=0)
+        fc2_value_result_squeezed_KDA = tf.squeeze(fc2_value_result_KDA, axis=[1])
+        self.value_cost_KDA = 0.5 * tf.reduce_mean(
+            tf.square(reward_KDA - fc2_value_result_squeezed_KDA), axis=0
+        )
 
+        fc2_value_result_squeezed_damage = tf.squeeze(fc2_value_result_damage, axis=[1])
+        self.value_cost_damage = 0.5 * tf.reduce_mean(
+            tf.square(reward_damage - fc2_value_result_squeezed_damage), axis=0
+        )
+
+        fc2_value_result_squeezed_pushing = tf.squeeze(fc2_value_result_pushing, axis=[1])
+        self.value_cost_pushing = 0.5 * tf.reduce_mean(
+            tf.square(reward_pushing - fc2_value_result_squeezed_pushing), axis=0
+        )
+
+        fc2_value_result_squeezed_win_lose = tf.squeeze(fc2_value_result_win_lose, axis=[1])
+        self.value_cost_win_lose = 0.5 * tf.reduce_mean(
+            tf.square(reward_win_lose - fc2_value_result_squeezed_win_lose), axis=0
+        )
+        self.value_cost = self.value_cost_farming + self.value_cost_KDA + self.value_cost_damage + self.value_cost_pushing + self.value_cost_win_lose
         # for entropy loss calculate
         label_logits_subtract_max_list = []
         label_sum_exp_logits_list = []
@@ -1186,18 +1293,62 @@ class Algorithm:
                 ),
                 name="fc1_value_result",
             )
-
+        #todo
         with tf.variable_scope("fc2_value"):
-            fc2_value_weight = self._fc_weight_variable(
-                shape=[64, 1], name="fc2_value_weight"
+            fc2_value_weight_farming = self._fc_weight_variable(
+                shape=[64, 1], name="fc2_value_weight_farming"
             )
-            fc2_value_bias = self._bias_variable(shape=[1], name="fc2_value_bias")
-            fc2_value_result = tf.add(
-                tf.matmul(fc1_value_result, fc2_value_weight),
-                fc2_value_bias,
-                name="fc2_value_result",
+            fc2_value_bias_farming = self._bias_variable(shape=[1], name="fc2_value_bias_farming")
+            fc2_value_result_farming = tf.add(
+                tf.matmul(fc1_value_result, fc2_value_weight_farming),
+                fc2_value_bias_farming,
+                name="fc2_value_result_farming",
             )
-            result_list.append(fc2_value_result)
+            result_list.append(fc2_value_result_farming)
+            
+            fc2_value_weight_KDA = self._fc_weight_variable(
+                shape=[64, 1], name="fc2_value_weight_KDA"
+            )
+            fc2_value_bias_KDA = self._bias_variable(shape=[1], name="fc2_value_bias_KDA")
+            fc2_value_result_KDA = tf.add(
+                tf.matmul(fc1_value_result, fc2_value_weight_KDA),
+                fc2_value_bias_KDA,
+                name="fc2_value_result_KDA",
+            )
+            result_list.append(fc2_value_result_KDA)
+
+            fc2_value_weight_damage = self._fc_weight_variable(
+                shape=[64, 1], name="fc2_value_weight_damage"
+            )
+            fc2_value_bias_damage = self._bias_variable(shape=[1], name="fc2_value_bias_damage")
+            fc2_value_result_damage = tf.add(
+                tf.matmul(fc1_value_result, fc2_value_weight_damage),
+                fc2_value_bias_damage,
+                name="fc2_value_result_damage",
+            )
+            result_list.append(fc2_value_result_damage)
+
+            fc2_value_weight_pushing = self._fc_weight_variable(
+                shape=[64, 1], name="fc2_value_weight_pushing"
+            )
+            fc2_value_bias_pushing = self._bias_variable(shape=[1], name="fc2_value_bias_pushing")
+            fc2_value_result_pushing = tf.add(
+                tf.matmul(fc1_value_result, fc2_value_weight_pushing),
+                fc2_value_bias_pushing,
+                name="fc2_value_result_pushing",
+            )
+            result_list.append(fc2_value_result_pushing)
+
+            fc2_value_weight_win_lose = self._fc_weight_variable(
+                shape=[64, 1], name="fc2_value_weight_win_lose"
+            )
+            fc2_value_bias_win_lose = self._bias_variable(shape=[1], name="fc2_value_bias_win_lose")
+            fc2_value_result_win_lose = tf.add(
+                tf.matmul(fc1_value_result, fc2_value_weight_win_lose),
+                fc2_value_bias_win_lose,
+                name="fc2_value_result_win_lose",
+            )
+            result_list.append(fc2_value_result_win_lose)
         return result_list
 
     def _fc_weight_variable(self, shape, name, trainable=True):

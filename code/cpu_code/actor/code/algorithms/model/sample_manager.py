@@ -64,8 +64,16 @@ class SampleManager:
         vec_feature,
         legal_action,
         action,
-        reward,
-        value,
+        reward_farming,
+        reward_KDA,
+        reward_damage,
+        reward_pushing,
+        reward_win_lose,
+        value_farming, 
+        value_KDA, 
+        value_damage, 
+        value_pushing, 
+        value_win_lose,
         prob,
         sub_action,
         lstm_cell,
@@ -79,11 +87,22 @@ class SampleManager:
         """
         samples must saved by frame_no order
         """
-        reward = self._clip_reward(reward)
+        #add five rewards
+        reward_farming = self._clip_reward(reward_farming)
+        reward_KDA = self._clip_reward(reward_KDA)
+        reward_damage = self._clip_reward(reward_damage)
+        reward_pushing = self._clip_reward(reward_pushing)
+        reward_win_lose = self._clip_reward(reward_win_lose)
+        reward = reward_damage + reward_farming + reward_KDA + reward_pushing + reward_win_lose
         rl_data_info = RLDataInfo()
         # rl_data_info.game_id = struct.pack('%ss' % len(game_id), bytes(game_id, encoding='utf8'))
+        value_farming = value_farming.flatten()[0]
+        value_KDA = value_KDA.flatten()[0]
+        value_damage = value_damage.flatten()[0]
+        value_pushing = value_pushing.flatten()[0]
+        value_win_lose = value_win_lose.flatten()[0]
+        value = value_farming + value_KDA + value_damage + value_pushing + value_win_lose
 
-        value = value.flatten()[0]
         lstm_cell = lstm_cell.flatten()
         lstm_hidden = lstm_hidden.flatten()
 
@@ -95,7 +114,18 @@ class SampleManager:
         if len(self.rl_data_map[agent_id]) > 0:
             last_key = list(self.rl_data_map[agent_id].keys())[-1]
             last_rl_data_info = self.rl_data_map[agent_id][last_key]
+            last_rl_data_info.next_value_farming = value_farming
+            last_rl_data_info.next_value_KDA = value_KDA
+            last_rl_data_info.next_value_damage = value_damage
+            last_rl_data_info.next_value_pushing = value_pushing
+            last_rl_data_info.next_value_win_lose = value_win_lose
             last_rl_data_info.next_value = value
+            
+            last_rl_data_info.reward_farming = reward_farming
+            last_rl_data_info.reward_KDA = reward_KDA
+            last_rl_data_info.reward_damage = reward_damage
+            last_rl_data_info.reward_pushing = reward_pushing
+            last_rl_data_info.reward_win_lose = reward_win_lose
             last_rl_data_info.reward = reward
 
         # save current sample
@@ -104,7 +134,18 @@ class SampleManager:
         rl_data_info.feature = vec_feature.reshape([-1])
         rl_data_info.legal_action = legal_action.reshape([-1])
         rl_data_info.reward = 0
+        rl_data_info.reward_farming = 0
+        rl_data_info.reward_KDA = 0
+        rl_data_info.reward_damage = 0
+        rl_data_info.reward_pushing = 0
+        rl_data_info.reward_win_lose = 0
+        
         rl_data_info.value = value
+        rl_data_info.value_farming = value_farming
+        rl_data_info.value_KDA = value_KDA
+        rl_data_info.value_damage = value_damage
+        rl_data_info.value_pushing = value_pushing
+        rl_data_info.value_win_lose = value_win_lose
         # rl_data_info.done = done
 
         rl_data_info.lstm_info = np.concatenate([lstm_cell, lstm_hidden]).reshape([-1])
@@ -123,12 +164,23 @@ class SampleManager:
         # rl_data_info.task_uuid = struct.pack('%ss' % len(uuid), bytes(uuid, encoding="utf8"))
         self.rl_data_map[agent_id][frame_no] = rl_data_info
 
-    def save_last_sample(self, reward, agent_id):
+    def save_last_sample(self, reward_farming, reward_KDA, reward_damage, reward_pushing, reward_win_lose, agent_id):
         if len(self.rl_data_map[agent_id]) > 0:
             last_key = list(self.rl_data_map[agent_id].keys())[-1]
             last_rl_data_info = self.rl_data_map[agent_id][last_key]
             last_rl_data_info.next_value = 0
-            last_rl_data_info.reward = reward
+            last_rl_data_info.next_value_farming = 0
+            last_rl_data_info.next_value_KDA = 0
+            last_rl_data_info.next_value_damage = 0
+            last_rl_data_info.next_value_pushing = 0
+            last_rl_data_info.next_value_win_lose = 0
+            
+            last_rl_data_info.reward = reward_farming + reward_KDA + reward_damage + reward_pushing + reward_win_lose
+            last_rl_data_info.reward_farming = reward_farming
+            last_rl_data_info.reward_KDA = reward_KDA
+            last_rl_data_info.reward_damage = reward_damage
+            last_rl_data_info.reward_pushing = reward_pushing
+            last_rl_data_info.reward_win_lose = reward_win_lose
 
     # def save_value(self, value):
     #     str_q_value = value.tostring()
@@ -149,9 +201,45 @@ class SampleManager:
         for i in range(self.num_agents):
             reversed_keys = list(self.rl_data_map[i].keys())
             reversed_keys.reverse()
-            gae, last_gae = 0.0, 0.0
+            gae_farming, gae_KDA, gae_damage, gae_pushing, gae_win_lose, last_gae = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+            gae = 0.0
             for j in reversed_keys:
                 rl_info = self.rl_data_map[i][j]
+                delta_farming = (
+                    -rl_info.value_farming + rl_info.reward_farming + self.gamma * rl_info.next_value_farming
+                )
+                gae_farming = gae_farming * self.gamma * self.lamda + delta_farming
+                # rl_info.advantage_farming = gae_farming
+                rl_info.reward_sum_farming = gae_farming + rl_info.value_farming
+                #ToDo
+                delta_KDA = (
+                    -rl_info.value_KDA + rl_info.reward_KDA + self.gamma * rl_info.next_value_KDA
+                )
+                gae_KDA = gae_KDA * self.gamma * self.lamda + delta_KDA
+                # rl_info.advantage_KDA = gae_KDA
+                rl_info.reward_sum_KDA = gae_KDA + rl_info.value_KDA
+                
+                delta_damage = (
+                    -rl_info.value_damage + rl_info.reward_damage + self.gamma * rl_info.next_value_damage
+                )
+                gae_damage = gae_damage * self.gamma * self.lamda + delta_damage
+                # rl_info.advantage_damage = gae_damage
+                rl_info.reward_sum_damage = gae_damage + rl_info.value_damage
+                
+                delta_pushing = (
+                    -rl_info.value_pushing + rl_info.reward_pushing + self.gamma * rl_info.next_value_pushing
+                )
+                gae_pushing = gae_pushing * self.gamma * self.lamda + delta_pushing
+                # rl_info.advantage_pushing = gae_pushing
+                rl_info.reward_sum_pushing = gae_pushing + rl_info.value_pushing
+                
+                delta_win_lose = (
+                    -rl_info.value_win_lose + rl_info.reward_win_lose + self.gamma * rl_info.next_value_win_lose
+                )
+                gae_win_lose = gae_win_lose * self.gamma * self.lamda + delta_win_lose
+                # rl_info.advantage_win_lose = gae_win_lose
+                rl_info.reward_sum_win_lose = gae_win_lose + rl_info.value_win_lose
+
                 delta = (
                     -rl_info.value + rl_info.reward + self.gamma * rl_info.next_value
                 )
@@ -211,10 +299,20 @@ class SampleManager:
 
                 # in distillation, the reward part is teacher model value
                 if not ModelConfig.distillation:
-                    sample_batch[cnt, idx] = rl_info.reward_sum
+                    sample_batch[cnt, idx] = rl_info.reward_sum_farming
+                    sample_batch[cnt, idx + 1] = rl_info.reward_sum_KDA
+                    sample_batch[cnt, idx + 2] = rl_info.reward_sum_damage
+                    sample_batch[cnt, idx + 3] = rl_info.reward_sum_pushing
+                    sample_batch[cnt, idx + 4] = rl_info.reward_sum_win_lose
                 else:
-                    sample_batch[cnt, idx] = rl_info.value
-                idx += 1
+                    sample_batch[cnt, idx] = rl_info.value_farming
+                    sample_batch[cnt, idx + 1] = rl_info.value_KDA
+                    sample_batch[cnt, idx + 2] = rl_info.value_damage
+                    sample_batch[cnt, idx + 3] = rl_info.value_pushing
+                    sample_batch[cnt, idx + 4] = rl_info.value_win_lose
+                #todo
+                # LOG.info("farming: {}, KDA:{}, damage:{}, pushing:{}, win_lose:{}".format(rl_info.value_farming, rl_info.value_KDA, rl_info.value_damage, rl_info.value_pushing, rl_info.value_win_lose))
+                idx += 5
                 sample_batch[cnt, idx] = rl_info.advantage
                 idx += 1
 
