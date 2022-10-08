@@ -24,7 +24,7 @@ import random
 IS_TRAIN = Config.IS_TRAIN
 FLAGS = flags.FLAGS
 reward_win = Config.reward_win
-
+eval_ai_bool = Config.eval_ai
 LOG = CommonLogger.get_logger()
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 OS_ENV = os.environ
@@ -154,11 +154,18 @@ class Actor:
             LOG.debug("reset agent {}".format(i))
             if eval:
                 if load_models is None or len(load_models) < 2:
-                    agent.reset(Config.ENEMY_TYPE, "eval_ai")
+                    if eval_ai_bool:
+                        agent.reset(Config.ENEMY_TYPE, "eval_ai")
+                    else:
+                        agent.reset("common_ai")
+                        LOG.info("load_common_ai")
                 else:
                     if load_models[i] is None:
-                        LOG.info("Use eval_ai")
-                        agent.reset(Config.ENEMY_TYPE, "eval_ai")
+                        if eval_ai_bool:
+                            LOG.info("Use eval_ai")
+                            agent.reset(Config.ENEMY_TYPE, "eval_ai")
+                        else:
+                            agent.reset("common_ai")
                     else:
                         agent.reset("network", model_path=load_models[i])
             else:
@@ -210,7 +217,8 @@ class Actor:
         LOG.info(env_config)
         use_common_ai = self._get_common_ai(eval, load_models)
         use_eval_ai = [False] * len(self.agents)
-
+        if not eval_ai_bool:
+            use_eval_ai = use_common_ai
         hero_name1 = env_config[0]["hero"]
         hero_name2 = env_config[1]["hero"]
         teacher_agents = [
@@ -248,11 +256,14 @@ class Actor:
 
         while not done:
             log_time_func("one_frame")
-            # while True:
             actions = [] # action of student model
             actions_t = [] # action of teacher model
             log_time_func("agent_process")
             for i, agent in enumerate(self.agents):
+                if use_eval_ai[i]: # it is the reverse meaning
+                    actions.append(None)
+                    rewards[i].append(0.0)
+                    continue
                 # student models explores the env
                 action_t, d_action_t, sample_t = teacher_agents[i].process(state_dict[i])
                 action, d_action, sample = agent.process(state_dict[i])
@@ -262,7 +273,6 @@ class Actor:
                 actions_t.append(action_t)
                 actions.append(action)
                 if action[0] == 10:
-                    # TODO: check what is h_act_num
                     episode_infos[i]["h_act_num"] += 1
 
                 # only the last reward is stored
@@ -383,6 +393,8 @@ class Actor:
         LOG.info(env_config)
         use_common_ai = self._get_common_ai(eval, load_models)
         use_eval_ai = [False] * len(self.agents)
+        if not eval_ai_bool:
+            use_eval_ai = use_common_ai
         # ATTENTION: agent.reset() loads models from local file which cost a lot of time.
         #            Before upload your code, please check your code to avoid ANY time-wasting
         #            operations between env.reset() and env.close_game(). Any TIMEOUT in a round
@@ -422,6 +434,11 @@ class Actor:
             actions = []
             log_time_func("agent_process")
             for i, agent in enumerate(self.agents):
+                # it is the reverse meaning
+                if use_eval_ai[i]:
+                    actions.append(None)
+                    rewards[i].append(0.0)
+                    continue
                 action, d_action, sample = agent.process(state_dict[i])
                 if eval:
                     action = d_action

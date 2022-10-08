@@ -224,7 +224,6 @@ class Agent:
         prob, value, action, _ = pred_ret
 
         legal_action = self._update_legal_action(state_dict["legal_action"], action)
-
         keys = (
             "frame_no",
             "vec_feature",
