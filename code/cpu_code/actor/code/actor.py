@@ -230,11 +230,12 @@ class Actor:
             game_id = state_dict[0]["game_id"]
 
         # update agents' game information
-        for i, agent in enumerate(self.agents):
+        for i in range(len(self.agents)):
             player_id = self.env.player_list[i]
             camp = self.env.player_camp.get(player_id)
-            agent.set_game_info(camp, player_id)
-
+            self.agents[i].set_game_info(camp, player_id)
+            teacher_agents[i].set_game_info(camp, player_id)
+ 
         # reset mem pool and models
         LOG.debug("reset sample_manager")
 
@@ -248,25 +249,25 @@ class Actor:
         while not done:
             log_time_func("one_frame")
             # while True:
-            # actions = [] # action of student model
+            actions = [] # action of student model
             actions_t = [] # action of teacher model
             log_time_func("agent_process")
             for i, agent in enumerate(self.agents):
                 # student models explores the env
                 action_t, d_action_t, sample_t = teacher_agents[i].process(state_dict[i])
-                # action, d_action, sample = agent.process(state_dict[i])
+                action, d_action, sample = agent.process(state_dict[i])
                 if eval:
-                    # action = d_action
+                    action = d_action
                     action_t = d_action_t
-                # actions.append(action)
                 actions_t.append(action_t)
-                if action_t[0] == 10:
+                actions.append(action)
+                if action[0] == 10:
                     # TODO: check what is h_act_num
                     episode_infos[i]["h_act_num"] += 1
 
                 # only the last reward is stored
                 # store student reward
-                rewards[i].append(sample_t["reward"])
+                rewards[i].append(sample["reward"])
 
                 if agent.is_latest_model and not eval:
                     # save teachers sample for updating student
@@ -279,7 +280,7 @@ class Actor:
 
             # reward :[dead,ep_rate,exp,hp_point,kill,last_hit,money,tower_hp_point,reward_sum]
             # studend-driven: let student model to explore the environment
-            _, r, d, state_dict = self.env.step(actions_t)
+            _, r, d, state_dict = self.env.step(actions)
 
             log_time_func("step", end=True)
 
@@ -330,6 +331,7 @@ class Actor:
         for i, agent in enumerate(self.agents):
             if use_common_ai[i]:
                 continue
+            print("check")
             for hero_state in req_pbs[i].hero_list:
                 if agent.player_id == hero_state.runtime_id:
                     episode_infos[i]["money_per_frame"] = (
@@ -631,8 +633,8 @@ class Actor:
         last_clean = time.time()
 
         heros = ["luban", "houyi", "gongsunli", "direnjie", "makeboluo"]
-        heros_count1 = [1, 1, 1, 1, 1]
-        heros_count2 = [1, 1, 1, 1, 1]
+        heros_count1 = [1, 0, 0, 0, 0]
+        heros_count2 = [1, 0, 0, 0, 0]
 
         camp1_heros = list(
             chain.from_iterable(map(repeat, heros, heros_count1))
