@@ -650,8 +650,8 @@ class Actor:
         last_clean = time.time()
 
         heros = ["luban", "houyi", "gongsunli", "direnjie", "makeboluo"]
-        heros_count1 = [1, 0, 0, 0, 0]
-        heros_count2 = [1, 0, 0, 0, 0]
+        heros_count1 = [1, 1, 1, 1, 0]
+        heros_count2 = [1, 1, 1, 1, 0]
 
         camp1_heros = list(
             chain.from_iterable(map(repeat, heros, heros_count1))
