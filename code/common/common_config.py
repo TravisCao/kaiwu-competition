@@ -25,7 +25,9 @@ class ModelConfig:
     first_decay_steps = 20000
     use_lr_decay = True
 
-    distillation = True
+    distillation = False
+
+    use_gru = True
 
     NETWORK_NAME = "network"
     LSTM_TIME_STEPS = 16
@@ -56,8 +58,8 @@ class ModelConfig:
         1,
         1,
         1,
-        512,
-        512,
+        LSTM_UNIT_SIZE,
+        LSTM_UNIT_SIZE,
     ]
     SERI_VEC_SPLIT_SHAPE = [(725,), (84,)]
     INIT_LEARNING_RATE_START = 1e-4
@@ -116,8 +118,8 @@ class ModelConfig:
         [16],    # weight4
         [16],    # weight5
         [16],    # is_train
-        [512],   # lstm_cell
-        [512],   # lstm_hidden_state
+        [LSTM_UNIT_SIZE],   # lstm_cell
+        [LSTM_UNIT_SIZE],   # lstm_hidden_state
     ]
     key_types = (
         "tf.float32,tf.float32,tf.float32,"

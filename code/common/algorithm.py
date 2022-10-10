@@ -20,7 +20,7 @@ class Algorithm:
         self.is_reinforce_task_list = Config.IS_REINFORCE_TASK_LIST
         self.min_policy = Config.MIN_POLICY
         self.clip_param = Config.CLIP_PARAM
-        # TODO: 16 is the LSTM steps?
+        # 16 is the LSTM steps
         self.batch_size = Config.BATCH_SIZE * 16
         self.restore_list = []
         self.var_beta = self.m_var_beta
@@ -33,6 +33,8 @@ class Algorithm:
 
         self.first_decay_steps = Config.first_decay_steps
         self.use_lr_decay = Config.use_lr_decay
+
+        self.use_gru = Config.use_gru
 
     def get_input_tensors(self):
         return [
@@ -573,11 +575,15 @@ class Algorithm:
         feature_vec = tf.reshape(split_feature_vec, feature_vec_shape)
         feature_vec = tf.identity(feature_vec, name="feature_vec")
 
+        # cell state is dropped in GRU
         lstm_cell_state = tf.reshape(init_lstm_cell, [-1, self.lstm_unit_size])
         lstm_hidden_state = tf.reshape(init_lstm_hidden, [-1, self.lstm_unit_size])
-        lstm_initial_state = tf.nn.rnn_cell.LSTMStateTuple(
-            lstm_cell_state, lstm_hidden_state
-        )
+        if self.use_gru:
+            lstm_initial_state = lstm_hidden_state
+        else:
+            lstm_initial_state = tf.nn.rnn_cell.LSTMStateTuple(
+                lstm_cell_state, lstm_hidden_state
+            )
 
         result_list = []
 
@@ -1075,23 +1081,34 @@ class Algorithm:
             # for lstm
             reshape_fc_public_result = tf.reshape(
                 fc_public_result,
-                [-1, self.lstm_time_steps, 512],
+                [-1, self.lstm_time_steps, self.lstm_unit_size],
                 name="reshape_fc_public_result",
             )
 
         with tf.variable_scope("public_lstm"):
-            lstm_cell = tf.contrib.rnn.BasicLSTMCell(
-                num_units=self.lstm_unit_size, forget_bias=1.0
-            )
+            if self.use_gru:
+                cell = tf.contrib.rnn.GRUCell(
+                    num_units=self.lstm_unit_size
+                )
+            else:
+                cell = tf.contrib.rnn.BasicLSTMCell(
+                    num_units=self.lstm_unit_size, forget_bias=1.0
+                )
+
+
             with tf.variable_scope("rnn"):
                 state = lstm_initial_state
                 lstm_output_list = []
                 for step in range(self.lstm_time_steps):
-                    lstm_output, state = lstm_cell(
+                    lstm_output, state = cell(
                         reshape_fc_public_result[:, step, :], state
                     )
                     lstm_output_list.append(lstm_output)
                 lstm_outputs = tf.concat(lstm_output_list, axis=1, name="lstm_outputs")
+                if self.use_gru:
+                    state = tf.nn.rnn_cell.LSTMStateTuple(
+                        state, state
+                    )
                 self.lstm_cell_output = state.c
                 self.lstm_hidden_output = state.h
             reshape_lstm_outputs_result = tf.reshape(
