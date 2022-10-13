@@ -509,7 +509,8 @@ class Algorithm:
                 )
                 min_surr = tf.minimum(surr1, surr2)
                 # Add dual clip
-                surr = tf.maximum(min_surr, self.clip_c * advantage)
+                # if A < 0, max(min_surr, cA)
+                surr = tf.where(tf.less(advantage, 0.), tf.maximum(min_surr, self.clip_c * advantage), min_surr)
                 temp_policy_loss = -tf.reduce_sum(
                     tf.to_float(weight_list[task_index]) * surr
                 ) / tf.maximum(tf.reduce_sum(tf.to_float(weight_list[task_index])), 1.0)
