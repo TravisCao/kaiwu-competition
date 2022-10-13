@@ -26,7 +26,7 @@ class ModelConfig:
     use_lr_decay = True
 
     distillation = False
-
+    CLIP_C = 3
     use_gru = False
 
     NETWORK_NAME = "network"
