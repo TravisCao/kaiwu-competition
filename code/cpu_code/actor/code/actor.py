@@ -423,6 +423,7 @@ class Actor:
         LOG.debug("reset sample_manager")
         sample_manager.reset(agents=self.agents, game_id=game_id)
         rewards = [[], []]
+        values = [[], []]
         step = 0
         log_time_func("reset", end=True)
         game_info = {}
@@ -448,6 +449,7 @@ class Actor:
 
                 # only the last reward is stored
                 rewards[i].append(sample["reward"])
+                values[i].append(sample["value"])
 
                 if agent.is_latest_model and not eval:
                     sample_manager.save_sample(
@@ -537,6 +539,7 @@ class Actor:
                 episode_infos[i]["win"] = -1 if agent.hero_camp == loss_camp else 1
 
             episode_infos[i]["reward"] = np.sum(rewards[i])
+            episode_infos[i]["value"] = np.average(values[i])
             episode_infos[i]["h_act_rate"] = episode_infos[i]["h_act_num"] / step
             # LOG.info(
             #     f"Agent:{i}: [dead, ep_rate, exp, hp_point, kill, last_hit, money, tower_hp_point, reward_sum]:{list(r_array_sum[0])}")
@@ -578,11 +581,12 @@ class Actor:
                 LOG.info("Agent is eval_ai, skip!")
                 continue
             LOG.info(
-                "Agent is_main:{}, type:{}, camp:{},reward:{:.3f}, win:{}, win_{}:{},h_act_rate:{}".format(
+                "Agent is_main:{}, type:{}, camp:{},reward:{:.3f}, value:{:.3f}, win:{}, win_{}:{},h_act_rate:{}".format(
                     agent.keep_latest and eval,
                     agent.agent_type,
                     agent.hero_camp,
                     episode_infos[i]["reward"],
+                    episode_infos[i]["value"],
                     episode_infos[i]["win"],
                     episode_infos[i]["hero_id"],
                     episode_infos[i]["win"],
