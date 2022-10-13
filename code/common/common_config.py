@@ -62,7 +62,7 @@ class ModelConfig:
         LSTM_UNIT_SIZE,
     ]
     SERI_VEC_SPLIT_SHAPE = [(725,), (84,)]
-    INIT_LEARNING_RATE_START = 3e-5
+    INIT_LEARNING_RATE_START = 1e-4
     BETA_START = 0.028
     LOG_EPSILON = 1e-6
     LABEL_SIZE_LIST = [12, 16, 16, 16, 16, 8]

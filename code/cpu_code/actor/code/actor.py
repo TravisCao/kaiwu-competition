@@ -19,7 +19,6 @@ from absl import flags
 from agent import Agent as Agent
 from algorithms.model.model import Model
 from itertools import chain, repeat
-import random
 
 IS_TRAIN = Config.IS_TRAIN
 FLAGS = flags.FLAGS
@@ -673,12 +672,6 @@ class Actor:
         while True:
             hero_name1 = camp1_heros[camp1_index]
             hero_name2 = camp2_heros[camp2_index]
-            self.ALL_CONFIG_DICT[hero_name1][0]["skill"] = self.SKILL_DICT[
-                random.randint(0, 11)
-            ]
-            self.ALL_CONFIG_DICT[hero_name1][1]["skill"] = self.SKILL_DICT[
-                random.randint(0, 11)
-            ]
             config_dicts = [
                 dict(self.ALL_CONFIG_DICT[hero_name1][0]),
                 dict(self.ALL_CONFIG_DICT[hero_name2][1]),

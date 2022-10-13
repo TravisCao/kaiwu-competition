@@ -45,7 +45,7 @@ class Config:
     hero_names = ['luban', 'houyi', 'direnjie', 'gongsunli', 'makeboluo']
     teacher_model_paths = ["teachers/teacher_" + hero for hero in hero_names]
     teacher_model_paths = dict(zip(hero_names, teacher_model_paths))
-    reward_win = 5.0
+    reward_win = 2.5 
     eval_ai = False
 
 if __name__ == "__main__":
