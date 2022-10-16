@@ -63,7 +63,7 @@ class ModelConfig:
     ]
     SERI_VEC_SPLIT_SHAPE = [(725,), (84,)]
     INIT_LEARNING_RATE_START = 1e-4
-    BETA_START = 0.025
+    BETA_START = 0.035
     LOG_EPSILON = 1e-6
     LABEL_SIZE_LIST = [12, 16, 16, 16, 16, 8]
     IS_REINFORCE_TASK_LIST = [
@@ -85,7 +85,7 @@ class ModelConfig:
     TASK_ID = 15428
     TASK_UUID = "a2dbb49f-8a67-4bd4-9dc5-69e78422e72e"
 
-    BATCH_SIZE = 512
+    BATCH_SIZE = 4096
     TARGET_EMBED_DIM = 32
 
     data_keys = (
@@ -134,13 +134,13 @@ class ModelConfig:
 
 
 class Config:
-    slow_time = 0.025
+    slow_time = 0.05
     TRAIN_MODE = 0
     EVAL_MODE = 1
     BATTLE_MODE = 2
     AISERVERPORT = [10010, 10011]
     # kinghonour: 1e-5 atari: 2.5e-4
-    INIT_LEARNING_RATE = 3e-5
+    INIT_LEARNING_RATE = 5e-5
     END_LEARNING_RATE = 1e-5
     ALPHA = 0.5
     BETA = 0.01

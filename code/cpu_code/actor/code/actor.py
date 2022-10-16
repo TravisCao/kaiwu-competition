@@ -121,6 +121,9 @@ class Actor:
         self.monitor_logger.addHandler(monitor_handler)
         self.render = None
 
+        self.reward_config = Config.reward
+        self.reward_config_after = Config.reward_after
+
     def set_teacher_agents(self, agents):
         self.teacher_agents = agents
 
@@ -439,6 +442,31 @@ class Actor:
                     actions.append(None)
                     rewards[i].append(0.0)
                     continue
+                
+                # if any hero reaches the level 4 OR one of the tower' hp is 0 OR
+                # the frame_no is greater than 4000
+                # changes reward
+
+                req_pb = state_dict[i]['req_pb']
+                # organ_list 0 and 1 are TOWER
+                assert req_pb.organ_list[0].type.name == "ACTOR_TOWER"
+                assert req_pb.organ_list[1].type.name == "ACTOR_TOWER"
+
+                # hero_list and organ_list in two state_dicts are same, pick one
+                level_4_flag = req_pb.hero_list[0].level > 4 or req_pb.hero_list[1].level > 4
+                tower_hp_0_flag = req_pb.organ_list[0].hp == 0 or req_pb.organ_list[1].hp == 0
+                frame_no_reach_4000_flag = req_pb.fram_no > 4000
+
+
+                if level_4_flag or tower_hp_0_flag or frame_no_reach_4000_flag:
+                    # tower_hp_point
+                    state_dict[i]['reward'][-1] -= state_dict[i]['reward'][8] * float(self.reward_config['reward_tower_hp_point'])
+                    state_dict[i]['reward'][-1] += state_dict[i]['reward'][8] * float(self.reward_config_after['reward_tower_hp_point'])
+
+                    # kill
+                    state_dict[i]['reward'][-1] -= state_dict[i]['reward'][4] * float(self.reward_config['reward_kill'])
+                    state_dict[i]['reward'][-1] += state_dict[i]['reward'][4] * float(self.reward_config_after['reward_kill'])
+
                 action, d_action, sample = agent.process(state_dict[i])
                 if eval:
                     action = d_action
