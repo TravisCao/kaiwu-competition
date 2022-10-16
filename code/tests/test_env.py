@@ -71,6 +71,9 @@ def _generate_legal_action(env, states, common_ai):
 
 def test_send_action(env, common_ai=None, eval=False, config_dicts=None):
     import pickle
+    import numpy as np
+    import pdb
+    reward_list = [[], []]
     while True:
         if config_dicts is None:
             config_dicts = [{"hero": "luban", "skill": "rage"} for _ in range(2)]
@@ -79,6 +82,7 @@ def test_send_action(env, common_ai=None, eval=False, config_dicts=None):
         obs, reward, done, state = env.reset(
             use_common_ai=common_ai, eval=eval, config_dicts=config_dicts, render=None
         )
+        reward_list[0].append(reward)
         if common_ai[0]:
             print("first state: ", state[1].keys())
         else:
@@ -96,7 +100,9 @@ def test_send_action(env, common_ai=None, eval=False, config_dicts=None):
             # if i > 10:
             #     break
         env.close_game()
+        pdb.set_trace()
         print(state)
+        return 
 
 def test_agent_action(env, config_dicts=None):
     import pickle
@@ -208,14 +214,14 @@ if __name__ == "__main__":
     # for i, h in enumerate(hero_list):
     #     print("=" * 15 + "test hero {}, {}/{}".format(h, i, len(hero_list)))
 
-    # test_send_action(
-    #     env,
-    #     common_ai=[False, False],
-    #     eval=False,
-    #     config_dicts=[{"hero": "diaochan","skill":"rage"} for _ in range(2)],
-    # )
-
-    test_agent_action(
+    test_send_action(
         env,
+        common_ai=[False, False],
+        eval=False,
         config_dicts=[{"hero": "diaochan","skill":"rage"} for _ in range(2)],
     )
+
+    # test_agent_action(
+    #     env,
+    #     config_dicts=[{"hero": "diaochan","skill":"rage"} for _ in range(2)],
+    # )

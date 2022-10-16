@@ -34,6 +34,7 @@ class Algorithm:
         self.first_decay_steps = Config.first_decay_steps
         self.use_lr_decay = Config.use_lr_decay
 
+        self.clip_c = Config.CLIP_C
         self.use_gru = Config.use_gru
 
     def get_input_tensors(self):
@@ -506,8 +507,12 @@ class Algorithm:
                     )
                     * advantage
                 )
+                min_surr = tf.minimum(surr1, surr2)
+                # Add dual clip
+                # if A < 0, max(min_surr, cA)
+                surr = tf.where(tf.less(advantage, 0.), tf.maximum(min_surr, self.clip_c * advantage), min_surr)
                 temp_policy_loss = -tf.reduce_sum(
-                    tf.to_float(weight_list[task_index]) * tf.minimum(surr1, surr2)
+                    tf.to_float(weight_list[task_index]) * surr
                 ) / tf.maximum(tf.reduce_sum(tf.to_float(weight_list[task_index])), 1.0)
                 self.policy_cost = self.policy_cost + temp_policy_loss
         # cross entropy loss
