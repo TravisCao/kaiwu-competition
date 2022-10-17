@@ -5,7 +5,7 @@
   "reward_ep_rate": "0.75",
   "reward_kill": "-0.5",
   "reward_dead": "-1.0",
-  "reward_tower_hp_point": "4.5",
+  "reward_tower_hp_point": "5.0",
   "reward_last_hit": "0.5",
   "log_level": "8"
 }

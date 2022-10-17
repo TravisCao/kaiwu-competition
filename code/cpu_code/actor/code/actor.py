@@ -442,11 +442,7 @@ class Actor:
                     actions.append(None)
                     rewards[i].append(0.0)
                     continue
-                
-                # if any hero reaches the level 4 OR one of the tower' hp is 0 OR
-                # the frame_no is greater than 4000
-                # changes reward
-
+ 
                 req_pb = state_dict[i]['req_pb']
                 # organ_list 0 and 1 are TOWER
                 assert req_pb.organ_list[0].type.name == "ACTOR_TOWER"
@@ -457,16 +453,37 @@ class Actor:
                 tower_hp_0_flag = req_pb.organ_list[0].hp == 0 or req_pb.organ_list[1].hp == 0
                 frame_no_reach_4000_flag = req_pb.frame_no > 4000
 
+                hero = req_pb.hero_list[0] if req_pb.hero_list[0].runtime_id == agent.player_id else req_pb.hero_list[1]                
+                enemy_crystal = req_pb.organ_list[2] if hero.camp != req_pb.organ_list[2].camp else req_pb.organ_list[3]
+                enemy_tower = req_pb.organ_list[0] if hero.camp != req_pb.organ_list[0].camp else req_pb.organ_list[1]
 
+                hero_location = np.array([hero.location.x, hero.location.y, hero.location.z])
+                enemy_crystal_location = np.array([enemy_crystal.location.x, enemy_crystal.location.y, enemy_crystal.location.z])
+                enemy_tower_location = np.array([enemy_tower.location.x, enemy_tower_location.y, enemy_tower_location.z])
+                atk_crystal_available = np.linalg.norm(hero_location - enemy_crystal_location) < hero.atk_range
+                atk_tower_available = np.linalg.norm(hero_location - enemy_tower_location) < hero.atk_range
+
+                def change_reward(idx, old_weight, new_weight):
+                    state_dict[i]['reward'] = list(state_dict[i]['reward'])
+                    state_dict[i]['reward'][-1] -= state_dict[i]['reward'][idx] * float(old_weight)
+                    state_dict[i]['reward'][-1] += state_dict[i]['reward'][idx] * float(new_weight)
+               
+                # if any hero reaches the level 4 OR one of the tower' hp is 0 OR
+                # the frame_no is greater than 4000
+                # changes reward
                 if level_4_flag or tower_hp_0_flag or frame_no_reach_4000_flag:
                     # tower_hp_point
-                    state_dict[i]['reward'] = list(state_dict[i]['reward'])
-                    state_dict[i]['reward'][-1] -= state_dict[i]['reward'][8] * float(self.reward_config['reward_tower_hp_point'])
-                    state_dict[i]['reward'][-1] += state_dict[i]['reward'][8] * float(self.reward_config_after['reward_tower_hp_point'])
-
+                    change_reward(8, self.reward_config['reward_tower_hp_point'], self.reward_config_after['reward_tower_hp_point'])
                     # kill
-                    state_dict[i]['reward'][-1] -= state_dict[i]['reward'][4] * float(self.reward_config['reward_kill'])
-                    state_dict[i]['reward'][-1] += state_dict[i]['reward'][4] * float(self.reward_config_after['reward_kill'])
+                    change_reward(4, self.reward_config['reward_kill'], self.reward_config_after['reward_kill'])
+                    # state_dict[i]['reward'] = list(state_dict[i]['reward'])
+                    # state_dict[i]['reward'][-1] -= state_dict[i]['reward'][8] * float(self.reward_config['reward_tower_hp_point'])
+                    # state_dict[i]['reward'][-1] += state_dict[i]['reward'][8] * float(self.reward_config_after['reward_tower_hp_point'])
+
+                    # state_dict[i]['reward'][-1] -= state_dict[i]['reward'][4] * float(self.reward_config['reward_kill'])
+                    # state_dict[i]['reward'][-1] += state_dict[i]['reward'][4] * float(self.reward_config_after['reward_kill'])
+                
+                
 
                 action, d_action, sample = agent.process(state_dict[i])
                 if eval:
