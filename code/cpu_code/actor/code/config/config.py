@@ -24,7 +24,7 @@ class Config:
     INIT_CLIP_PARAM = 0.1
     BATCH_SIZE = 1
 
-    GAMMA = 0.995
+    GAMMA = 0.998
     LAMDA = 0.95
     STEPS = 128
     ENV_NAME = "kh-1v1"
@@ -57,7 +57,7 @@ class Config:
         "reward_ep_rate": "0.75",
         "reward_kill": "-0.6",
         "reward_dead": "-1.0",
-        "reward_tower_hp_point": "5.5", # increase 10%
+        "reward_tower_hp_point": "6.0", # increase 20%
         "reward_last_hit": "0.5",
         "log_level": "8"
     }

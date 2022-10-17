@@ -426,6 +426,7 @@ class Actor:
         sample_manager.reset(agents=self.agents, game_id=game_id)
         rewards = [[], []]
         values = [[], []]
+        att_tar = []
         step = 0
         log_time_func("reset", end=True)
         game_info = {}
@@ -459,10 +460,12 @@ class Actor:
 
                 hero_location = np.array([hero.location.x, hero.location.y, hero.location.z])
                 enemy_crystal_location = np.array([enemy_crystal.location.x, enemy_crystal.location.y, enemy_crystal.location.z])
-                enemy_tower_location = np.array([enemy_tower.location.x, enemy_tower_location.y, enemy_tower_location.z])
+                enemy_tower_location = np.array([enemy_tower.location.x, enemy_tower.location.y, enemy_tower.location.z])
                 atk_crystal_available = np.linalg.norm(hero_location - enemy_crystal_location) < hero.atk_range
                 atk_tower_available = np.linalg.norm(hero_location - enemy_tower_location) < hero.atk_range
-
+                
+                being_attack_by_tower = enemy_tower.attack_target == hero.runtime_id
+                being_attack_by_crystal = enemy_crystal.attack_target == hero.runtime_id
                 def change_reward(idx, old_weight, new_weight):
                     state_dict[i]['reward'] = list(state_dict[i]['reward'])
                     state_dict[i]['reward'][-1] -= state_dict[i]['reward'][idx] * float(old_weight)
@@ -482,7 +485,12 @@ class Actor:
 
                     # state_dict[i]['reward'][-1] -= state_dict[i]['reward'][4] * float(self.reward_config['reward_kill'])
                     # state_dict[i]['reward'][-1] += state_dict[i]['reward'][4] * float(self.reward_config_after['reward_kill'])
-                
+                if (atk_crystal_available and not being_attack_by_crystal) or (atk_tower_available and not being_attack_by_tower):
+                    # tower_hp_point
+                    change_reward(8, self.reward_config['reward_tower_hp_point'], self.reward_config_after['reward_tower_hp_point'])
+                else:
+                    # tower_hp_point
+                    change_reward(8, self.reward_config_after['reward_tower_hp_point'], self.reward_config['reward_tower_hp_point'])
                 
 
                 action, d_action, sample = agent.process(state_dict[i])
@@ -505,12 +513,13 @@ class Actor:
             log_time_func("step")
             # reward :[dead,ep_rate,exp,hp_point,kill,last_hit,money,tower_hp_point,reward_sum]
             _, r, d, state_dict = self.env.step(actions)
-
+            
             # if np.isnan(r[0][-1]) or np.isnan(r[1][-1]):
             #     exit(0)
             log_time_func("step", end=True)
-
+            
             req_pbs = self.env.cur_req_pb
+            
             if req_pbs[0] is None:
                 req_pb = req_pbs[1]
             else:
@@ -535,7 +544,7 @@ class Actor:
             log_time_func("one_frame", end=True)
 
         self.env.close_game()
-
+        
         # determine which camp is lost
         game_info["length"] = req_pb.frame_no
         loss_camp = -1
