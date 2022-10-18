@@ -205,9 +205,10 @@ class Actor:
                             )
                     else:
                         sample_manager.save_last_sample(agent_id=i, reward=0)
-    
 
-    def _run_episode_distillation(self, env_config, eval=False, load_models=None, eval_info=""):
+    def _run_episode_distillation(
+        self, env_config, eval=False, load_models=None, eval_info=""
+    ):
         for item in g_log_time.items():
             g_log_time[item[0]] = []
         sample_manager = self.m_sample_manager
@@ -245,7 +246,7 @@ class Actor:
             camp = self.env.player_camp.get(player_id)
             self.agents[i].set_game_info(camp, player_id)
             teacher_agents[i].set_game_info(camp, player_id)
- 
+
         # reset mem pool and models
         LOG.debug("reset sample_manager")
 
@@ -258,16 +259,18 @@ class Actor:
 
         while not done:
             log_time_func("one_frame")
-            actions = [] # action of student model
-            actions_t = [] # action of teacher model
+            actions = []  # action of student model
+            actions_t = []  # action of teacher model
             log_time_func("agent_process")
             for i, agent in enumerate(self.agents):
-                if use_eval_ai[i]: # it is the reverse meaning
+                if use_eval_ai[i]:  # it is the reverse meaning
                     actions.append(None)
                     rewards[i].append(0.0)
                     continue
                 # student models explores the env
-                action_t, d_action_t, sample_t = teacher_agents[i].process(state_dict[i])
+                action_t, d_action_t, sample_t = teacher_agents[i].process(
+                    state_dict[i]
+                )
                 action, d_action, sample = agent.process(state_dict[i])
                 if eval:
                     action = d_action
@@ -431,59 +434,125 @@ class Actor:
         game_info = {}
         episode_infos = [{"h_act_num": 0} for _ in self.agents]
 
+        decay_rate = 1.0
         while not done:
             log_time_func("one_frame")
             # while True:
             actions = []
             log_time_func("agent_process")
+            decay_rate *= 0.9998
             for i, agent in enumerate(self.agents):
                 # it is the reverse meaning
                 if use_eval_ai[i]:
                     actions.append(None)
                     rewards[i].append(0.0)
                     continue
- 
-                req_pb = state_dict[i]['req_pb']
+
+                req_pb = state_dict[i]["req_pb"]
                 # organ_list 0 and 1 are TOWER
                 assert req_pb.organ_list[0].type.name == "ACTOR_TOWER"
                 assert req_pb.organ_list[1].type.name == "ACTOR_TOWER"
 
                 # hero_list and organ_list in two state_dicts are same, pick one
-                level_4_flag = req_pb.hero_list[0].level > 4 or req_pb.hero_list[1].level > 4
-                tower_hp_0_flag = req_pb.organ_list[0].hp == 0 or req_pb.organ_list[1].hp == 0
+                level_4_flag = (
+                    req_pb.hero_list[0].level > 4 or req_pb.hero_list[1].level > 4
+                )
+                tower_hp_0_flag = (
+                    req_pb.organ_list[0].hp == 0 or req_pb.organ_list[1].hp == 0
+                )
                 frame_no_reach_4000_flag = req_pb.frame_no > 4000
 
-                hero = req_pb.hero_list[0] if req_pb.hero_list[0].runtime_id == agent.player_id else req_pb.hero_list[1]                
-                enemy_crystal = req_pb.organ_list[2] if hero.camp != req_pb.organ_list[2].camp else req_pb.organ_list[3]
-                enemy_tower = req_pb.organ_list[0] if hero.camp != req_pb.organ_list[0].camp else req_pb.organ_list[1]
+                hero = (
+                    req_pb.hero_list[0]
+                    if req_pb.hero_list[0].runtime_id == agent.player_id
+                    else req_pb.hero_list[1]
+                )
+                enemy_crystal = (
+                    req_pb.organ_list[2]
+                    if hero.camp != req_pb.organ_list[2].camp
+                    else req_pb.organ_list[3]
+                )
+                enemy_tower = (
+                    req_pb.organ_list[0]
+                    if hero.camp != req_pb.organ_list[0].camp
+                    else req_pb.organ_list[1]
+                )
 
-                hero_location = np.array([hero.location.x, hero.location.y, hero.location.z])
-                enemy_crystal_location = np.array([enemy_crystal.location.x, enemy_crystal.location.y, enemy_crystal.location.z])
-                enemy_tower_location = np.array([enemy_tower.location.x, enemy_tower_location.y, enemy_tower_location.z])
-                atk_crystal_available = np.linalg.norm(hero_location - enemy_crystal_location) < hero.atk_range
-                atk_tower_available = np.linalg.norm(hero_location - enemy_tower_location) < hero.atk_range
+                hero_location = np.array(
+                    [hero.location.x, hero.location.y, hero.location.z]
+                )
+                enemy_crystal_location = np.array(
+                    [
+                        enemy_crystal.location.x,
+                        enemy_crystal.location.y,
+                        enemy_crystal.location.z,
+                    ]
+                )
+                enemy_tower_location = np.array(
+                    [
+                        enemy_tower.location.x,
+                        enemy_tower.location.y,
+                        enemy_tower.location.z,
+                    ]
+                )
+                atk_crystal_available = (
+                    np.linalg.norm(hero_location - enemy_crystal_location)
+                    < hero.atk_range
+                )
+                atk_tower_available = (
+                    np.linalg.norm(hero_location - enemy_tower_location)
+                    < hero.atk_range
+                )
 
                 def change_reward(idx, old_weight, new_weight):
-                    state_dict[i]['reward'] = list(state_dict[i]['reward'])
-                    state_dict[i]['reward'][-1] -= state_dict[i]['reward'][idx] * float(old_weight)
-                    state_dict[i]['reward'][-1] += state_dict[i]['reward'][idx] * float(new_weight)
-               
-                # if any hero reaches the level 4 OR one of the tower' hp is 0 OR
-                # the frame_no is greater than 4000
-                # changes reward
-                if level_4_flag or tower_hp_0_flag or frame_no_reach_4000_flag:
-                    # tower_hp_point
-                    change_reward(8, self.reward_config['reward_tower_hp_point'], self.reward_config_after['reward_tower_hp_point'])
-                    # kill
-                    change_reward(4, self.reward_config['reward_kill'], self.reward_config_after['reward_kill'])
-                    # state_dict[i]['reward'] = list(state_dict[i]['reward'])
-                    # state_dict[i]['reward'][-1] -= state_dict[i]['reward'][8] * float(self.reward_config['reward_tower_hp_point'])
-                    # state_dict[i]['reward'][-1] += state_dict[i]['reward'][8] * float(self.reward_config_after['reward_tower_hp_point'])
+                    state_dict[i]["reward"] = list(state_dict[i]["reward"])
+                    state_dict[i]["reward"][-1] -= state_dict[i]["reward"][idx] * float(
+                        old_weight
+                    )
+                    state_dict[i]["reward"][-1] += state_dict[i]["reward"][idx] * float(
+                        new_weight
+                    )
 
-                    # state_dict[i]['reward'][-1] -= state_dict[i]['reward'][4] * float(self.reward_config['reward_kill'])
-                    # state_dict[i]['reward'][-1] += state_dict[i]['reward'][4] * float(self.reward_config_after['reward_kill'])
-                
-                
+                change_reward(
+                    8,
+                    self.reward_config["reward_tower_hp_point"] * decay_rate / 0.9998,
+                    self.reward_config["reward_tower_hp_point"] * decay_rate,
+                )
+                change_reward(
+                    4,
+                    self.reward_config["reward_kill"] * decay_rate / 0.9998,
+                    self.reward_config["reward_kill"] * decay_rate,
+                )
+                change_reward(
+                    5,
+                    self.reward_config["reward_last_hit"] * decay_rate / 0.9998,
+                    self.reward_config["reward_last_hit"] * decay_rate,
+                )
+                change_reward(
+                    0,
+                    self.reward_config["reward_death"] * decay_rate / 0.9998,
+                    self.reward_config["reward_death"] * decay_rate,
+                )
+                change_reward(
+                    1,
+                    self.reward_config["reward_ep_rate"] * decay_rate / 0.9998,
+                    self.reward_config["reward_ep_rate"] * decay_rate,
+                )
+                change_reward(
+                    2,
+                    self.reward_config["reward_exp"] * decay_rate / 0.9998,
+                    self.reward_config["reward_exp"] * decay_rate,
+                )
+                change_reward(
+                    3,
+                    self.reward_config["reward_hp_point"] * decay_rate / 0.9998,
+                    self.reward_config["reward_hp_point"] * decay_rate,
+                )
+                change_reward(
+                    7,
+                    self.reward_config["reward_money"] * decay_rate / 0.9998,
+                    self.reward_config["reward_money"] * decay_rate,
+                )
 
                 action, d_action, sample = agent.process(state_dict[i])
                 if eval:
@@ -576,7 +645,7 @@ class Actor:
                         hero_state.totalBeHurtByHero / game_info["length"]
                     )
                     episode_infos[i]["hero_id"] = self.HERO_DICT[env_config[0]["hero"]]
-                    episode_infos[i]["totalHurtToHero"] = hero_state.totalHurtToHero
+                    episode_infos[i]["totalHurtToHero"] = np.average(rewards[i]) # hero_state.totalHurtToHero
                     break
             if loss_camp == -1:
                 episode_infos[i]["win"] = 0
@@ -702,13 +771,9 @@ class Actor:
         heros_count1 = [1, 1, 1, 1, 0]
         heros_count2 = [1, 1, 1, 1, 0]
 
-        camp1_heros = list(
-            chain.from_iterable(map(repeat, heros, heros_count1))
-        )
+        camp1_heros = list(chain.from_iterable(map(repeat, heros, heros_count1)))
 
-        camp2_heros = list(
-            chain.from_iterable(map(repeat, heros, heros_count2))
-        )
+        camp2_heros = list(chain.from_iterable(map(repeat, heros, heros_count2)))
 
         # change it to select heroes
         camp1_index = 0
@@ -743,11 +808,17 @@ class Actor:
 
                     if not Config.distillation:
                         self._run_episode(
-                            config_dicts, True, load_models=cur_models, eval_info=eval_info
+                            config_dicts,
+                            True,
+                            load_models=cur_models,
+                            eval_info=eval_info,
                         )
                     else:
                         self._run_episode_distillation(
-                            config_dicts, True, load_models=cur_models, eval_info=eval_info
+                            config_dicts,
+                            True,
+                            load_models=cur_models,
+                            eval_info=eval_info,
                         )
 
                     # swap camp
@@ -764,8 +835,7 @@ class Actor:
                         )
                     else:
                         self._run_episode_distillation(
-                            config_dicts, eval_with_common_ai,
-                            load_models=load_models
+                            config_dicts, eval_with_common_ai, load_models=load_models
                         )
 
                 if self.env.render is not None:

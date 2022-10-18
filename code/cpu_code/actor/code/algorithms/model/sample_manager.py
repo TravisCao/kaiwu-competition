@@ -47,6 +47,7 @@ class SampleManager:
         # load config from config file
         self.gamma = Config.GAMMA
         self.lamda = Config.LAMDA
+        self.horizon = Config.HORIZON
 
         # self.sample_parse_lib = interface.SampleParse()
 
@@ -149,15 +150,57 @@ class SampleManager:
         for i in range(self.num_agents):
             reversed_keys = list(self.rl_data_map[i].keys())
             reversed_keys.reverse()
-            gae, last_gae = 0.0, 0.0
+
+            delta_list = np.zeros(len(reversed_keys))
+            count = len(reversed_keys) - 1
             for j in reversed_keys:
                 rl_info = self.rl_data_map[i][j]
                 delta = (
                     -rl_info.value + rl_info.reward + self.gamma * rl_info.next_value
                 )
-                gae = gae * self.gamma * self.lamda + delta
-                rl_info.advantage = gae
-                rl_info.reward_sum = gae + rl_info.value
+                delta_list[count] = delta
+                count -= 1
+
+            count = len(reversed_keys) - 1
+            last_gae = 0.0
+            for j in reversed_keys:
+                rl_info = self.rl_data_map[i][j]
+                if count == len(reversed_keys) - 1:
+                    rl_info.advantage = delta_list[count]
+                elif count + self.horizon >= len(reversed_keys):
+                    rl_info.advantage = (
+                        delta_list[count] + last_gae * self.gamma * self.lamda
+                    )
+                else: # count + self.horizon < len(reversed_keys):
+                    rl_info.advantage = (
+                        delta_list[count]
+                        + last_gae * self.gamma * self.lamda
+                        - (self.gamma * self.lamda) ** self.horizon
+                        * delta_list[count + self.horizon]
+                    )
+                rl_info.reward_sum = rl_info.advantage + rl_info.value
+                last_gae = rl_info.advantage
+                count -= 1
+
+            # gae, last_gae = 0.0, 0.0
+            # for idx_j in range(len(reversed_keys)):
+            #     gae = 0.0
+            #     count = 0
+            #     for k in reversed_keys[idx_j:]:
+            #         if count == self.horizon:
+            #             break
+            #         rl_info = self.rl_data_map[i][k]
+            #         delta = (
+            #             -rl_info.value
+            #             + rl_info.reward
+            #             + self.gamma * rl_info.next_value
+            #         )
+            #         gae = gae * self.gamma * self.lamda + delta
+            #         if not rl_info.advantage:
+            #             rl_info.advantage = gae
+            #             rl_info.reward_sum = gae + rl_info.value
+            #         count += 1
+
 
     # data_keys = "vec_data,reward,advantage,label0,label1,label2,label3,label4,label5,prob0,prob1,prob2,prob3,prob4," \
     #             "prob5,weight0,weight1,weight2,weight3,weight4,weight5,is_train, lstm_cell, lstm_hidden_state"

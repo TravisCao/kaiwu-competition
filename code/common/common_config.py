@@ -24,6 +24,7 @@ class ModelConfig:
 
     first_decay_steps = 20000
     use_lr_decay = True
+    use_beta_decay = True
 
     distillation = False
     CLIP_C = 3
@@ -62,7 +63,7 @@ class ModelConfig:
         LSTM_UNIT_SIZE,
     ]
     SERI_VEC_SPLIT_SHAPE = [(725,), (84,)]
-    INIT_LEARNING_RATE_START = 1e-4
+    INIT_LEARNING_RATE_START = 4e-4
     BETA_START = 0.035
     LOG_EPSILON = 1e-6
     LABEL_SIZE_LIST = [12, 16, 16, 16, 16, 8]
@@ -134,7 +135,9 @@ class ModelConfig:
 
 
 class Config:
-    slow_time = 0.05
+    HORIZON = 500 # 50 (secs) * 30 / 3
+
+    slow_time = 1.00
     TRAIN_MODE = 0
     EVAL_MODE = 1
     BATTLE_MODE = 2
@@ -149,7 +152,7 @@ class Config:
     # kinghonour:4096 atari:256
     BATCH_SIZE = 4096
     EPISODE = 20000000
-    GAMMA = 0.995
+    GAMMA = 0.998 # original 0.995
     LAMDA = 0.95
     STEPS = 128
     EPOCHES = 4

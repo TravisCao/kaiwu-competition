@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+
 from common_config import DimConfig
 from common_config import ModelConfig as Config
 
@@ -33,6 +34,7 @@ class Algorithm:
 
         self.first_decay_steps = Config.first_decay_steps
         self.use_lr_decay = Config.use_lr_decay
+        self.use_beta_decay = Config.use_beta_decay
 
         self.clip_c = Config.CLIP_C
         self.use_gru = Config.use_gru
@@ -123,6 +125,12 @@ class Algorithm:
 
         # we can set the global step here for optimizer
         self.set_global_step(update)
+
+        if self.use_beta_decay:
+            beta_decayed = tf.train.cosine_decay_restarts(
+                self.m_var_beta, self.global_step, self.first_decay_steps
+            )
+            self.m_var_beta = beta_decayed
 
         # one batch_size is of LSTM_STEPS * features dimension
 
