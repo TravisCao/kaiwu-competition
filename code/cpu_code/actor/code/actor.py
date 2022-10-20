@@ -412,8 +412,10 @@ class Actor:
         )
         if state_dict[0] is None:
             game_id = state_dict[1]["game_id"]
+            frame_no = state_dict[1]['frame_no']
         else:
             game_id = state_dict[0]["game_id"]
+            frame_no = state_dict[0]['frame_no']
 
         # update agents' game information
         for i, agent in enumerate(self.agents):
@@ -426,12 +428,32 @@ class Actor:
         sample_manager.reset(agents=self.agents, game_id=game_id)
         rewards = [[], []]
         values = [[], []]
+        rewards_hp = [[], []]
+        rewards_tower_hp = [[], []]
+        rewards_exp = [[], []]
+        rewards_money = [[], []]
         step = 0
         log_time_func("reset", end=True)
         game_info = {}
         episode_infos = [{"h_act_num": 0} for _ in self.agents]
 
+        decay_rate = 1.0
+        decay_rate_slow = 1.0
+        decay_rate_coef = 0.999712 # 4min
+        decay_rate_coef_slow = 0.999808 # 6min
         while not done:
+            if frame_no > 2 * 60 * 30 and frame_no <= 4 * 60 * 30:
+                decay_rate = decay_rate_coef ** (2 * 600)
+                decay_rate_slow = decay_rate_coef_slow ** (2 * 600)
+            elif frame_no > 4 * 60 * 30 and frame_no <= 6 * 60 * 30:
+                decay_rate = decay_rate_coef ** (4 * 600)
+                decay_rate_slow = decay_rate_coef_slow ** (4 * 600)
+            elif frame_no > 6 * 60 * 30 and frame_no <= 8 * 60 * 30:
+                decay_rate = decay_rate_coef ** (6 * 600)
+                decay_rate_slow = decay_rate_coef_slow ** (6 * 600)
+            else:
+                decay_rate = decay_rate_coef ** (8 * 600)
+                decay_rate_slow = decay_rate_coef_slow ** (8 * 600)
             log_time_func("one_frame")
             # while True:
             actions = []
@@ -444,46 +466,60 @@ class Actor:
                     continue
  
                 req_pb = state_dict[i]['req_pb']
+                frame_no = state_dict[i]['frame_no']
                 # organ_list 0 and 1 are TOWER
                 assert req_pb.organ_list[0].type.name == "ACTOR_TOWER"
                 assert req_pb.organ_list[1].type.name == "ACTOR_TOWER"
 
-                # hero_list and organ_list in two state_dicts are same, pick one
-                level_4_flag = req_pb.hero_list[0].level > 4 or req_pb.hero_list[1].level > 4
-                tower_hp_0_flag = req_pb.organ_list[0].hp == 0 or req_pb.organ_list[1].hp == 0
-                frame_no_reach_4000_flag = req_pb.frame_no > 4000
-
-                hero = req_pb.hero_list[0] if req_pb.hero_list[0].runtime_id == agent.player_id else req_pb.hero_list[1]                
-                enemy_crystal = req_pb.organ_list[2] if hero.camp != req_pb.organ_list[2].camp else req_pb.organ_list[3]
-                enemy_tower = req_pb.organ_list[0] if hero.camp != req_pb.organ_list[0].camp else req_pb.organ_list[1]
-
-                hero_location = np.array([hero.location.x, hero.location.y, hero.location.z])
-                enemy_crystal_location = np.array([enemy_crystal.location.x, enemy_crystal.location.y, enemy_crystal.location.z])
-                enemy_tower_location = np.array([enemy_tower.location.x, enemy_tower_location.y, enemy_tower_location.z])
-                atk_crystal_available = np.linalg.norm(hero_location - enemy_crystal_location) < hero.atk_range
-                atk_tower_available = np.linalg.norm(hero_location - enemy_tower_location) < hero.atk_range
-
                 def change_reward(idx, old_weight, new_weight):
-                    state_dict[i]['reward'] = list(state_dict[i]['reward'])
-                    state_dict[i]['reward'][-1] -= state_dict[i]['reward'][idx] * float(old_weight)
-                    state_dict[i]['reward'][-1] += state_dict[i]['reward'][idx] * float(new_weight)
-               
-                # if any hero reaches the level 4 OR one of the tower' hp is 0 OR
-                # the frame_no is greater than 4000
-                # changes reward
-                if level_4_flag or tower_hp_0_flag or frame_no_reach_4000_flag:
-                    # tower_hp_point
-                    change_reward(8, self.reward_config['reward_tower_hp_point'], self.reward_config_after['reward_tower_hp_point'])
-                    # kill
-                    change_reward(4, self.reward_config['reward_kill'], self.reward_config_after['reward_kill'])
-                    # state_dict[i]['reward'] = list(state_dict[i]['reward'])
-                    # state_dict[i]['reward'][-1] -= state_dict[i]['reward'][8] * float(self.reward_config['reward_tower_hp_point'])
-                    # state_dict[i]['reward'][-1] += state_dict[i]['reward'][8] * float(self.reward_config_after['reward_tower_hp_point'])
+                    state_dict[i]["reward"] = list(state_dict[i]["reward"])
+                    state_dict[i]["reward"][-1] -= state_dict[i]["reward"][idx] * float(
+                        old_weight
+                    )
+                    state_dict[i]["reward"][-1] += state_dict[i]["reward"][idx] * float(
+                        new_weight
+                    )
 
-                    # state_dict[i]['reward'][-1] -= state_dict[i]['reward'][4] * float(self.reward_config['reward_kill'])
-                    # state_dict[i]['reward'][-1] += state_dict[i]['reward'][4] * float(self.reward_config_after['reward_kill'])
-                
-                
+                change_reward(
+                    8,
+                    float(self.reward_config["reward_tower_hp_point"]) * decay_rate_slow,
+                    float(self.reward_config["reward_tower_hp_point"]) * decay_rate_slow,
+                )
+                change_reward(
+                    4,
+                    float(self.reward_config["reward_kill"]) * decay_rate,
+                    float(self.reward_config["reward_kill"]) * decay_rate,
+                )
+                change_reward(
+                    5,
+                    float(self.reward_config["reward_last_hit"]) * decay_rate,
+                    float(self.reward_config["reward_last_hit"]) * decay_rate,
+                )
+                change_reward(
+                    0,
+                    float(self.reward_config["reward_dead"]) * decay_rate,
+                    float(self.reward_config["reward_dead"]) * decay_rate,
+                )
+                change_reward(
+                    1,
+                    float(self.reward_config["reward_ep_rate"]) * decay_rate,
+                    float(self.reward_config["reward_ep_rate"]) * decay_rate,
+                )
+                change_reward(
+                    2,
+                    float(self.reward_config["reward_exp"]) * decay_rate,
+                    float(self.reward_config["reward_exp"]) * decay_rate,
+                )
+                change_reward(
+                    3,
+                    float(self.reward_config["reward_hp_point"]) * decay_rate,
+                    float(self.reward_config["reward_hp_point"]) * decay_rate,
+                )
+                change_reward(
+                    7,
+                    float(self.reward_config["reward_money"]) * decay_rate,
+                    float(self.reward_config["reward_money"]) * decay_rate,
+                )
 
                 action, d_action, sample = agent.process(state_dict[i])
                 if eval:
@@ -494,6 +530,10 @@ class Actor:
 
                 # only the last reward is stored
                 rewards[i].append(sample["reward"])
+                rewards_hp[i].append(r[i][3] * float(self.reward_config["reward_hp_point"]) * decay_rate)
+                rewards_tower_hp[i].append(r[i][-2] * float(self.reward_config["reward_tower_hp_point"]) * decay_rate_slow)
+                rewards_exp[i].append(r[i][2] * float(self.reward_config["reward_exp"]) * decay_rate)
+                rewards_money[i].append(r[i][-3] * float(self.reward_config["reward_money"]) * decay_rate)
                 values[i].append(sample["value"])
 
                 if agent.is_latest_model and not eval:
@@ -562,12 +602,14 @@ class Actor:
             for hero_state in req_pbs[i].hero_list:
                 if agent.player_id == hero_state.runtime_id:
                     episode_infos[i]["money_per_frame"] = (
-                        hero_state.moneyCnt / game_info["length"]
+                        # hero_state.moneyCnt / game_info["length"]
+                        np.sum(rewards_exp[i]) + np.sum(rewards_money[i])
                     )
                     episode_infos[i]["kill"] = hero_state.killCnt
                     episode_infos[i]["death"] = hero_state.deadCnt
                     episode_infos[i]["hurt_per_frame"] = (
-                        hero_state.totalHurt / game_info["length"]
+                        # hero_state.totalHurt / game_info["length"]
+                        np.sum(rewards_tower_hp[i])
                     )
                     episode_infos[i]["hurtH_per_frame"] = (
                         hero_state.totalHurtToHero / game_info["length"]
@@ -583,7 +625,9 @@ class Actor:
             else:
                 episode_infos[i]["win"] = -1 if agent.hero_camp == loss_camp else 1
 
+            episode_infos[i]["win"] = game_info["length"]
             episode_infos[i]["reward"] = np.sum(rewards[i])
+            episode_infos[i]["totalHurtToHero"] = np.average(rewards[i])
             episode_infos[i]["value"] = np.average(values[i])
             episode_infos[i]["h_act_rate"] = episode_infos[i]["h_act_num"] / step
             # LOG.info(
@@ -653,8 +697,8 @@ class Actor:
                         "reward": episode_infos[i]["reward"],
                     }
                 )
-                if episode_infos[i]["win"] == -1 and eval:
-                    episode_infos[i]["win"] = 0
+                # if episode_infos[i]["win"] == -1 and eval:
+                #     episode_infos[i]["win"] = 0
                 self.upload_monitor_data(
                     {
                         "win": episode_infos[i]["win"],

@@ -63,7 +63,7 @@ class ModelConfig:
     ]
     SERI_VEC_SPLIT_SHAPE = [(725,), (84,)]
     INIT_LEARNING_RATE_START = 1e-4
-    BETA_START = 0.035
+    BETA_START = 0.020
     LOG_EPSILON = 1e-6
     LABEL_SIZE_LIST = [12, 16, 16, 16, 16, 8]
     IS_REINFORCE_TASK_LIST = [
@@ -134,7 +134,7 @@ class ModelConfig:
 
 
 class Config:
-    slow_time = 0.05
+    slow_time = 1.00
     TRAIN_MODE = 0
     EVAL_MODE = 1
     BATTLE_MODE = 2
@@ -149,7 +149,7 @@ class Config:
     # kinghonour:4096 atari:256
     BATCH_SIZE = 4096
     EPISODE = 20000000
-    GAMMA = 0.995
+    GAMMA = 0.998
     LAMDA = 0.95
     STEPS = 128
     EPOCHES = 4
